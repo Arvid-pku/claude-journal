@@ -388,6 +388,56 @@ app.get('/api/analytics', (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── Bookmarks (cross-session favorites & notes) ─────────────────────────────
+
+app.get('/api/bookmarks', (req, res) => {
+  try {
+    const type = req.query.type; // 'favorites' or 'notes'
+    const results = [];
+    const names = loadNames();
+    const files = fs.readdirSync(ANNOTATIONS_DIR).filter(f => f.endsWith('.json') && !f.startsWith('_'));
+
+    for (const f of files) {
+      const parts = f.replace('.json', '').split('__');
+      if (parts.length < 2) continue;
+      const project = parts[0], session = parts.slice(1).join('__');
+      let annotations;
+      try { annotations = JSON.parse(fs.readFileSync(path.join(ANNOTATIONS_DIR, f), 'utf8')); } catch { continue; }
+      const sessionName = names[`${project}__${session}`] || session.slice(0, 8);
+
+      if (type === 'favorites') {
+        for (const [uuid, anno] of Object.entries(annotations)) {
+          if (uuid === '_meta' || !anno.favorite) continue;
+          let text = '', role = '', ts = '';
+          const fp = path.join(PROJECTS_DIR, project, `${session}.jsonl`);
+          if (fs.existsSync(fp)) {
+            for (const line of fs.readFileSync(fp, 'utf8').split('\n')) {
+              if (!line) continue;
+              try {
+                const m = JSON.parse(line);
+                if (m.uuid !== uuid) continue;
+                ts = m.timestamp || '';
+                if (m.type === 'user' && typeof m.message?.content === 'string') { text = m.message.content; role = 'user'; }
+                else if (m.type === 'assistant' && Array.isArray(m.message?.content)) { text = m.message.content.filter(b => b.type === 'text').map(b => b.text).join('\n'); role = 'assistant'; }
+                break;
+              } catch {}
+            }
+          }
+          if (text) results.push({ project, session, sessionName, uuid, role, text: text.slice(0, 200), ts });
+        }
+      } else if (type === 'notes') {
+        const meta = annotations._meta;
+        if (meta?.sessionNote || (meta?.colorNotes && Object.keys(meta.colorNotes).length)) {
+          results.push({ project, session, sessionName, hasSessionNote: !!meta.sessionNote, colorNoteCount: Object.keys(meta.colorNotes || {}).length });
+        }
+      }
+    }
+
+    results.sort((a, b) => (b.ts || b.session || '').localeCompare(a.ts || a.session || ''));
+    res.json(results);
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ── Subagents ───────────────────────────────────────────────────────────────
 
 app.get('/api/subagents/:project/:session', (req, res) => {

@@ -1,4 +1,5 @@
 import { state, api, formatNum, formatCost, escapeHtml, shortenPath } from './state.js';
+import { navigate } from './router.js';
 
 export async function showAnalytics(projectId) {
   const container = document.getElementById('messages');
@@ -8,6 +9,13 @@ export async function showAnalytics(projectId) {
     const url = projectId ? `/api/analytics?project=${encodeURIComponent(projectId)}` : '/api/analytics';
     const data = await api(url);
     container.innerHTML = renderDashboard(data, projectId);
+    // Wire scope selector — must be done AFTER innerHTML replaces the DOM
+    const sel = document.getElementById('analytics-scope');
+    if (sel) sel.addEventListener('change', () => {
+      const pid = sel.value || null;
+      navigate('analytics', { projectId: pid });
+      showAnalytics(pid);
+    });
   } catch (err) {
     container.innerHTML = `<div style="padding:40px;text-align:center;color:var(--red)">Failed to load analytics: ${escapeHtml(err.message)}</div>`;
   }

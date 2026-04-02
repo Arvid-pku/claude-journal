@@ -36,13 +36,14 @@
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
         <input type="text" id="sidebar-search" placeholder="Search sessions..." autocomplete="off">
       </div>
-      <div class="sidebar-filters">
-        <button id="sidebar-filter-annotated" class="filter-btn" title="Show annotated sessions only">
-          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M16 3H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V8Z"/><path d="M15 3v4a2 2 0 0 0 2 2h4"/></svg>
-          Annotated
-        </button>
+      <div class="sidebar-tabs">
+        <button class="sidebar-tab active" data-tab="sessions">Sessions</button>
+        <button class="sidebar-tab" data-tab="starred">Starred</button>
+        <button class="sidebar-tab" data-tab="notes">Notes</button>
       </div>
       <nav id="project-list" class="sidebar-nav"></nav>
+      <div id="sidebar-starred" class="sidebar-nav hidden"></div>
+      <div id="sidebar-notes" class="sidebar-nav hidden"></div>
     </aside>
     <div id="resize-handle"></div>
     <main id="main">

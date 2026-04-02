@@ -1434,6 +1434,140 @@ mark.search-hit {
   .settings-columns { flex-direction: column; gap: 16px; }
 }
 
+/* ── Sidebar Tabs ──────────────────────────────────────────────────────── */
+
+.sidebar-tabs {
+  display: flex;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.sidebar-tab {
+  flex: 1;
+  padding: 8px 0;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-weight: 500;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  border-bottom: 2px solid transparent;
+  transition: all var(--transition);
+}
+
+.sidebar-tab:hover { color: var(--text-secondary); }
+.sidebar-tab.active { color: var(--accent); border-bottom-color: var(--accent); }
+
+/* ── Bookmarks (starred / notes in sidebar) ────────────────────────────── */
+
+.bookmark-item {
+  padding: 8px 14px;
+  cursor: pointer;
+  border-left: 2px solid transparent;
+  transition: all var(--transition);
+}
+
+.bookmark-item:hover { background: var(--bg-hover); }
+.bookmark-item + .bookmark-item { border-top: 1px solid var(--border); }
+
+.bookmark-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-bottom: 2px;
+}
+
+.bookmark-role {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.bookmark-role.user { color: var(--green); }
+.bookmark-role.assistant { color: var(--accent); }
+.bookmark-session { font-size: 11px; color: var(--text-secondary); flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.bookmark-time { font-size: 10px; color: var(--text-muted); }
+
+.bookmark-text {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+.bookmark-meta {
+  display: flex;
+  gap: 8px;
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+/* ── Side Comments (Google Docs style) ─────────────────────────────────── */
+
+.msg-comment {
+  position: absolute;
+  right: -196px;
+  top: 8px;
+  width: 180px;
+  padding: 8px 10px;
+  background: var(--bg-surface);
+  border: 1px solid var(--border);
+  border-left: 3px solid var(--comment-color, var(--accent));
+  border-radius: 0 6px 6px 0;
+  font-size: 11px;
+  box-shadow: 0 1px 6px rgba(0,0,0,0.1);
+  cursor: pointer;
+  transition: all var(--transition);
+  z-index: 2;
+}
+
+.msg-comment:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.15); }
+
+.comment-title {
+  font-weight: 600;
+  font-size: 11px;
+  color: var(--comment-color, var(--accent));
+  margin-bottom: 2px;
+}
+
+.comment-text {
+  color: var(--text-secondary);
+  line-height: 1.4;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+}
+
+/* When comments exist, shift messages left to make room */
+#messages.has-comments .message {
+  max-width: 700px;
+  margin-left: 32px;
+  margin-right: auto;
+}
+
+/* On narrow screens, show comments inline */
+@media (max-width: 1200px) {
+  .msg-comment {
+    position: relative;
+    right: auto;
+    top: auto;
+    width: 100%;
+    margin-top: 8px;
+    border-radius: 6px;
+    border-left-width: 3px;
+  }
+  #messages.has-comments .message {
+    max-width: var(--msg-max-width, 900px);
+    margin: 0 auto;
+  }
+}
+
 /* ── Session badge ─────────────────────────────────────────────────────── */
 
 .session-badge {
@@ -1443,33 +1577,7 @@ mark.search-hit {
   line-height: 1;
 }
 
-/* ── Sidebar filters ───────────────────────────────────────────────────── */
-
-.sidebar-filters {
-  display: flex;
-  gap: 4px;
-  padding: 6px 12px;
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-
-.filter-btn {
-  display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  padding: 3px 8px;
-  border: 1px solid var(--border);
-  border-radius: 4px;
-  background: none;
-  color: var(--text-muted);
-  font-size: 11px;
-  font-family: var(--font-sans);
-  cursor: pointer;
-  transition: all var(--transition);
-}
-
-.filter-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
-.filter-btn.toggled { background: var(--accent-dim); color: var(--accent); border-color: var(--accent); }
+/* (sidebar filters replaced by sidebar tabs above) */
 
 /* ── Delete button ─────────────────────────────────────────────────────── */
 

@@ -61,6 +61,11 @@ export function renderMessages() {
   const frag = document.createDocumentFragment();
   for (const msg of msgs) frag.appendChild(createMessageEl(msg));
   container.appendChild(frag);
+
+  // Check if any messages have side comments → adjust layout
+  const hasComments = container.querySelector('.msg-comment') !== null;
+  container.classList.toggle('has-comments', hasComments);
+
   updateStats(msgs.length);
   afterRender();
 }
@@ -122,6 +127,26 @@ function createMessageEl(msg) {
     <button title="Edit" data-action="edit" data-uuid="${msg.uuid}">${IC.edit}</button>
     <button title="Copy" data-action="copy" data-uuid="${msg.uuid}">${IC.copy}</button>
     <button class="act-del" title="Delete message" data-action="delete" data-uuid="${msg.uuid}">${IC.trash}</button>`;
+
+  // Side comment (Google Docs style) for highlighted messages with color notes
+  if (anno.highlight) {
+    const colorNotes = state.annotations._meta?.colorNotes || {};
+    const note = colorNotes[anno.highlight];
+    if (note && (note.title || note.text)) {
+      const comment = document.createElement('div');
+      comment.className = 'msg-comment';
+      comment.style.setProperty('--comment-color', anno.highlight);
+      comment.innerHTML = `<div class="comment-title">${escapeHtml(note.title || 'Note')}</div>${note.text ? `<div class="comment-text">${escapeHtml(truncateText(note.text, 120))}</div>` : ''}`;
+      comment.addEventListener('click', () => {
+        const panel = document.getElementById('notes-panel');
+        if (panel.classList.contains('hidden')) {
+          const { toggleNotesPanel } = window.__notesPanel || {};
+          if (toggleNotesPanel) toggleNotesPanel();
+        }
+      });
+      inner.appendChild(comment);
+    }
+  }
 
   inner.appendChild(header); inner.appendChild(body); inner.appendChild(actions);
   div.appendChild(inner);

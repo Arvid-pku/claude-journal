@@ -42,8 +42,6 @@ export async function loadSessions(projectId) {
 export function renderSessionList(projectId, sessions, container) {
   container.innerHTML = '';
   const query = document.getElementById('sidebar-search').value.toLowerCase();
-  const filterAnnotated = document.getElementById('sidebar-filter-annotated')?.classList.contains('toggled') || false;
-
   // Sort based on settings
   const sorted = [...sessions];
   switch (state.settings.sessionSort) {
@@ -57,7 +55,6 @@ export function renderSessionList(projectId, sessions, container) {
   for (const s of sorted) {
     const title = s.customName || s.summary || s.firstPrompt || s.sessionId.slice(0, 8);
     if (query && !title.toLowerCase().includes(query) && !s.sessionId.includes(query)) continue;
-    if (filterAnnotated && !s.hasAnnotations) continue;
 
     const item = document.createElement('div');
     item.className = 'session-item';

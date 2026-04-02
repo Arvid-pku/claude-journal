@@ -13,6 +13,7 @@ import { showAnalytics } from './analytics.js';
 // ── Wire callbacks ──────────────────────────────────────────────────────
 
 setAfterRender(() => { renderRail(); renderNotesPanel(); });
+window.__notesPanel = { toggleNotesPanel };
 setOnSessionSelect((pid, sid) => { navigate('session', { projectId: pid, sessionId: sid }); loadSession(pid, sid); });
 setSearchNavigate((pid, sid, uuid) => {
   loadSession(pid, sid).then(() => {
@@ -76,15 +77,6 @@ async function handleRoute(route) {
     await loadSession(route.projectId, route.sessionId);
   } else if (route.page === 'analytics') {
     await showAnalytics(route.projectId);
-    // Wire scope selector
-    setTimeout(() => {
-      const sel = document.getElementById('analytics-scope');
-      if (sel) sel.addEventListener('change', () => {
-        const pid = sel.value || null;
-        navigate('analytics', { projectId: pid });
-        showAnalytics(pid);
-      });
-    }, 100);
   } else if (route.page === 'search') {
     openSearch(route.query);
   }
@@ -206,6 +198,67 @@ async function saveSettings() {
     }
     toast('Settings saved', 'success');
   } catch (err) { toast(`Failed: ${err.message}`, 'error'); }
+}
+
+// ── Sidebar Tabs (Starred / Notes) ──────────────────────────────────────
+
+async function switchSidebarTab(tab) {
+  document.querySelectorAll('.sidebar-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
+  document.getElementById('project-list').classList.toggle('hidden', tab !== 'sessions');
+  document.getElementById('sidebar-starred').classList.toggle('hidden', tab !== 'starred');
+  document.getElementById('sidebar-notes').classList.toggle('hidden', tab !== 'notes');
+
+  if (tab === 'starred') {
+    const el = document.getElementById('sidebar-starred');
+    el.innerHTML = '<div style="padding:16px;color:var(--text-muted);font-size:12px">Loading...</div>';
+    try {
+      const items = await api('/api/bookmarks?type=favorites');
+      if (!items.length) { el.innerHTML = '<div style="padding:16px;color:var(--text-muted);font-size:12px">No starred messages</div>'; return; }
+      el.innerHTML = items.map(item => `
+        <div class="bookmark-item" data-project="${escapeHtml(item.project)}" data-session="${item.session}" data-uuid="${item.uuid}">
+          <div class="bookmark-header">
+            <span class="bookmark-role ${item.role}">${item.role === 'user' ? 'You' : 'Claude'}</span>
+            <span class="bookmark-session">${escapeHtml(item.sessionName)}</span>
+            <span class="bookmark-time">${item.ts ? new Date(item.ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}</span>
+          </div>
+          <div class="bookmark-text">${escapeHtml(item.text.slice(0, 120))}</div>
+        </div>
+      `).join('');
+      el.querySelectorAll('.bookmark-item').forEach(bi => bi.addEventListener('click', () => {
+        navigate('session', { projectId: bi.dataset.project, sessionId: bi.dataset.session });
+        loadSession(bi.dataset.project, bi.dataset.session).then(() => {
+          setTimeout(() => {
+            const msg = document.querySelector(`.message[data-uuid="${bi.dataset.uuid}"]`);
+            if (msg) { msg.scrollIntoView({ behavior: 'smooth', block: 'center' }); msg.querySelector('.message-inner')?.classList.add('flash'); }
+          }, 300);
+        });
+      }));
+    } catch { el.innerHTML = '<div style="padding:16px;color:var(--red);font-size:12px">Failed to load</div>'; }
+  }
+
+  if (tab === 'notes') {
+    const el = document.getElementById('sidebar-notes');
+    el.innerHTML = '<div style="padding:16px;color:var(--text-muted);font-size:12px">Loading...</div>';
+    try {
+      const items = await api('/api/bookmarks?type=notes');
+      if (!items.length) { el.innerHTML = '<div style="padding:16px;color:var(--text-muted);font-size:12px">No sessions with notes</div>'; return; }
+      el.innerHTML = items.map(item => `
+        <div class="bookmark-item" data-project="${escapeHtml(item.project)}" data-session="${item.session}">
+          <div class="bookmark-header">
+            <span class="bookmark-session">${escapeHtml(item.sessionName)}</span>
+          </div>
+          <div class="bookmark-meta">
+            ${item.hasSessionNote ? '<span>Has session note</span>' : ''}
+            ${item.colorNoteCount ? `<span>${item.colorNoteCount} highlight note${item.colorNoteCount > 1 ? 's' : ''}</span>` : ''}
+          </div>
+        </div>
+      `).join('');
+      el.querySelectorAll('.bookmark-item').forEach(bi => bi.addEventListener('click', () => {
+        navigate('session', { projectId: bi.dataset.project, sessionId: bi.dataset.session });
+        loadSession(bi.dataset.project, bi.dataset.session);
+      }));
+    } catch { el.innerHTML = '<div style="padding:16px;color:var(--red);font-size:12px">Failed to load</div>'; }
+  }
 }
 
 // ── Export ───────────────────────────────────────────────────────────────
@@ -365,13 +418,9 @@ function setupEvents() {
   });
   document.getElementById('btn-sidebar-toggle').addEventListener('click', () => document.getElementById('sidebar').classList.toggle('collapsed'));
 
-  // Sidebar filter
-  document.getElementById('sidebar-filter-annotated').addEventListener('click', (e) => {
-    e.currentTarget.classList.toggle('toggled');
-    for (const [pid, sessions] of Object.entries(state.sessions)) {
-      const c = document.querySelector(`.project-sessions[data-project="${pid}"]`);
-      if (c) renderSessionList(pid, sessions, c);
-    }
+  // Sidebar tabs
+  document.querySelectorAll('.sidebar-tab').forEach(tab => {
+    tab.addEventListener('click', () => switchSidebarTab(tab.dataset.tab));
   });
 
   // Sidebar search
