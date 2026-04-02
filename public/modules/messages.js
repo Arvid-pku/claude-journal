@@ -124,8 +124,8 @@ function createMessageEl(msg) {
     <button class="act-fav ${anno.favorite ? 'active' : ''}" title="Favorite" data-action="favorite" data-uuid="${msg.uuid}">${IC.star}</button>
     <button title="Highlight" data-action="highlight" data-uuid="${msg.uuid}">${IC.highlight}</button>
     <button class="${hasComment ? 'active' : ''}" title="Comment" data-action="comment" data-uuid="${msg.uuid}">${IC.note}</button>
-    <button title="Edit" data-action="edit" data-uuid="${msg.uuid}">${IC.edit}</button>
     <button title="Copy" data-action="copy" data-uuid="${msg.uuid}">${IC.copy}</button>
+    <button title="Edit" data-action="edit" data-uuid="${msg.uuid}">${IC.edit}</button>
     <button class="act-del" title="Delete message" data-action="delete" data-uuid="${msg.uuid}">${IC.trash}</button>`;
 
   inner.appendChild(header); inner.appendChild(body); inner.appendChild(actions);
@@ -362,7 +362,11 @@ export function startEditing(uuid) {
   body.appendChild(textarea); body.appendChild(actions);
   textarea.focus();
 
-  actions.querySelector('.edit-cancel').addEventListener('click', () => renderMessages());
+  actions.querySelector('.edit-cancel').addEventListener('click', () => {
+    const scrollTop = document.getElementById('messages').scrollTop;
+    renderMessages();
+    document.getElementById('messages').scrollTop = scrollTop;
+  });
   actions.querySelector('.edit-save').addEventListener('click', async () => {
     const saveBtn = actions.querySelector('.edit-save');
     saveBtn.textContent = 'Saving...'; saveBtn.disabled = true;
@@ -372,7 +376,9 @@ export function startEditing(uuid) {
       await apiPut(`/api/messages/${encodeURIComponent(state.currentProject)}/${encodeURIComponent(state.currentSession)}/${encodeURIComponent(uuid)}`, reqBody);
       if (msg.role === 'user') msg.content = textarea.value;
       else { for (const p of msg.parts) { if (p.type === 'text') { p.content = textarea.value; break; } } }
+      const scrollTop = document.getElementById('messages').scrollTop;
       renderMessages();
+      document.getElementById('messages').scrollTop = scrollTop;
     } catch { saveBtn.textContent = 'Error!'; saveBtn.style.background = 'var(--red)'; setTimeout(() => { saveBtn.textContent = 'Save'; saveBtn.style.background = ''; saveBtn.disabled = false; }, 2000); }
   });
 }

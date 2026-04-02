@@ -1,7 +1,7 @@
 import { state, DEFAULTS, api, apiPost, apiPut, apiDelete, IC, setAfterRender, setOnSessionSelect,
   showModal, hideModal, renderMarkdown, escapeHtml, applySettings } from './state.js';
 import { renderSidebar, loadSessions, renderSessionList, updateSidebarActive,
-  hideContextMenu, renameSession, duplicateSession, moveSession, deleteSession, setupResize } from './sidebar.js';
+  hideContextMenu, pinSession, renameSession, duplicateSession, moveSession, deleteSession, setupResize } from './sidebar.js';
 import { processMessages, renderMessages, updateSessionInfo, updateStats, startEditing } from './messages.js';
 import { renderRail, updateRailActive } from './rail.js';
 import { toggleNotesPanel, renderNotesPanel } from './notes.js';
@@ -207,6 +207,50 @@ async function saveSettings() {
 
 // ── Sidebar Tabs (Starred / Notes) ──────────────────────────────────────
 
+// ── Confirm Action (with suppress) ──────────────────────────────────────
+
+const suppressUntil = {}; // key -> timestamp
+
+function confirmAction(key, title, text, onConfirm) {
+  // Check suppress
+  if (suppressUntil[key] && Date.now() < suppressUntil[key]) {
+    onConfirm();
+    return;
+  }
+
+  document.getElementById('confirm-title').textContent = title;
+  document.getElementById('confirm-text').textContent = text;
+  document.getElementById('confirm-suppress').checked = false;
+  showModal('confirm-modal');
+
+  const okBtn = document.getElementById('confirm-ok');
+  const newBtn = okBtn.cloneNode(true);
+  okBtn.parentNode.replaceChild(newBtn, okBtn);
+
+  newBtn.addEventListener('click', () => {
+    hideModal('confirm-modal');
+    if (document.getElementById('confirm-suppress').checked) {
+      suppressUntil[key] = Date.now() + 10 * 60 * 1000; // 10 minutes
+    }
+    onConfirm();
+  });
+}
+
+// ── Sidebar Tabs (Starred / Highlights / Notes) ─────────────────────────
+
+// Refresh whichever sidebar panel is currently open
+function refreshActiveSidebarPanel() {
+  for (const p of ['starred', 'highlights', 'notes']) {
+    const el = document.getElementById(`sidebar-${p}`);
+    if (el && !el.classList.contains('hidden')) {
+      // Force reload by closing and re-opening
+      el.classList.add('hidden');
+      toggleSidebarPanel(p);
+      return;
+    }
+  }
+}
+
 const PANELS = ['starred', 'highlights', 'notes'];
 const PANEL_LABELS = { starred: 'Starred', highlights: 'Highlights', notes: 'Notes' };
 const PANEL_TYPES = { starred: 'favorites', highlights: 'highlights', notes: 'notes' };
@@ -233,6 +277,8 @@ async function toggleSidebarPanel(panel) {
 
   try {
     const items = await api(`/api/bookmarks?type=${PANEL_TYPES[panel]}`);
+    // Update header with count
+    el.querySelector('.sidebar-panel-close span').textContent = `${PANEL_LABELS[panel]} (${items.length})`;
     const header = el.querySelector('.sidebar-panel-close').outerHTML;
     if (!items.length) { el.innerHTML = header + `<div style="padding:16px;color:var(--text-muted);font-size:12px">No ${PANEL_LABELS[panel].toLowerCase()} yet</div>`; return; }
 
@@ -354,7 +400,21 @@ function setupEvents() {
     if (!btn) return;
     const { action, uuid } = btn.dataset;
     switch (action) {
-      case 'favorite': setAnnotation(uuid, 'favorite', !(state.annotations[uuid]?.favorite)); break;
+      case 'favorite': {
+        const newVal = !(state.annotations[uuid]?.favorite);
+        await setAnnotation(uuid, 'favorite', newVal, { rerender: false });
+        // Update in-place
+        const msgEl = document.querySelector(`.message[data-uuid="${uuid}"]`);
+        if (msgEl) {
+          const inner = msgEl.querySelector('.message-inner');
+          inner.classList.toggle('favorited', newVal);
+          const favBtn = msgEl.querySelector('[data-action="favorite"]');
+          if (favBtn) favBtn.classList.toggle('active', newVal);
+        }
+        renderNotesPanel();
+        refreshActiveSidebarPanel();
+        break;
+      }
       case 'highlight': {
         const picker = document.getElementById('highlight-picker');
         const rect = btn.getBoundingClientRect();
@@ -379,7 +439,6 @@ function setupEvents() {
         card.querySelector('.comment-input').focus();
         break;
       }
-      case 'edit': startEditing(uuid); break;
       case 'copy': {
         const msg = state.displayMessages.find(m => m.uuid === uuid);
         if (!msg) break;
@@ -388,25 +447,45 @@ function setupEvents() {
         btn.innerHTML = IC.check; setTimeout(() => btn.innerHTML = IC.copy, 1500);
         toast('Copied', 'success', 1500); break;
       }
+      case 'edit': {
+        confirmAction('edit', 'Edit Message', 'This will modify the JSONL file. Continue?', () => startEditing(uuid));
+        break;
+      }
       case 'delete': {
-        if (!confirm('Delete this message from the JSONL file?')) break;
-        try {
-          await apiDelete(`/api/messages/${encodeURIComponent(state.currentProject)}/${encodeURIComponent(state.currentSession)}/${encodeURIComponent(uuid)}`);
-          state.displayMessages = state.displayMessages.filter(m => m.uuid !== uuid);
-          renderMessages();
-          toast('Message deleted', 'success');
-        } catch (err) { toast(`Delete failed: ${err.message}`, 'error'); }
+        confirmAction('delete', 'Delete Message', 'This will permanently remove this message from the JSONL file.', async () => {
+          try {
+            await apiDelete(`/api/messages/${encodeURIComponent(state.currentProject)}/${encodeURIComponent(state.currentSession)}/${encodeURIComponent(uuid)}`);
+            state.displayMessages = state.displayMessages.filter(m => m.uuid !== uuid);
+            // Remove from DOM in-place, no scroll reset
+            const msgEl = document.querySelector(`.message[data-uuid="${uuid}"]`);
+            if (msgEl) msgEl.remove();
+            toast('Message deleted', 'success');
+          } catch (err) { toast(`Delete failed: ${err.message}`, 'error'); }
+        });
         break;
       }
     }
   });
 
   // Highlight picker
-  document.getElementById('highlight-picker').addEventListener('click', (e) => {
+  document.getElementById('highlight-picker').addEventListener('click', async (e) => {
     const dot = e.target.closest('[data-color]');
     if (!dot) return;
-    setAnnotation(document.getElementById('highlight-picker').dataset.uuid, 'highlight', dot.dataset.color || false);
-    document.getElementById('highlight-picker').classList.add('hidden');
+    const picker = document.getElementById('highlight-picker');
+    const uuid = picker.dataset.uuid;
+    const color = dot.dataset.color || false;
+    picker.classList.add('hidden');
+    await setAnnotation(uuid, 'highlight', color, { rerender: false });
+    // Update in-place
+    const msgEl = document.querySelector(`.message[data-uuid="${uuid}"]`);
+    if (msgEl) {
+      const inner = msgEl.querySelector('.message-inner');
+      inner.classList.toggle('highlighted', !!color);
+      if (color) inner.style.cssText = `--highlight-color:${color}`;
+      else inner.style.cssText = '';
+    }
+    renderNotesPanel();
+    refreshActiveSidebarPanel();
   });
 
   // Comment auto-save on blur
@@ -423,6 +502,7 @@ function setupEvents() {
       if (!document.querySelector('#messages .msg-comment')) document.getElementById('messages').classList.remove('has-comments');
     }
     renderNotesPanel();
+    refreshActiveSidebarPanel();
   });
 
   // Delete comment
@@ -436,6 +516,7 @@ function setupEvents() {
     btn.closest('.msg-comment')?.remove();
     if (!document.querySelector('#messages .msg-comment')) document.getElementById('messages').classList.remove('has-comments');
     renderNotesPanel();
+    refreshActiveSidebarPanel();
   });
 
   // Session note save (in notes panel)
@@ -447,7 +528,7 @@ function setupEvents() {
   // Context menu
   document.getElementById('context-menu').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-ctx]');
-    if (btn) ({ rename: renameSession, duplicate: duplicateSession, move: moveSession, delete: deleteSession })[btn.dataset.ctx]?.();
+    if (btn) ({ pin: pinSession, rename: renameSession, duplicate: duplicateSession, move: moveSession, delete: deleteSession })[btn.dataset.ctx]?.();
   });
 
   // Close popups
@@ -538,7 +619,7 @@ function setupEvents() {
 
     if (e.key === 'Escape') {
       closeSearch(); hideContextMenu(); document.getElementById('highlight-picker').classList.add('hidden');
-      ['note-modal', 'move-modal', 'delete-modal', 'memory-modal', 'settings-modal'].forEach(id => hideModal(id));
+      ['note-modal', 'move-modal', 'delete-modal', 'memory-modal', 'settings-modal', 'confirm-modal'].forEach(id => hideModal(id));
       const box = document.getElementById('search-box');
       if (!box.classList.contains('hidden')) { box.classList.add('hidden'); state.searchQuery = ''; document.getElementById('message-search').value = ''; renderMessages(); }
       return;

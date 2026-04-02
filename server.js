@@ -119,6 +119,22 @@ function getSessionStats(filePath) {
   return result;
 }
 
+// ── Pins ────────────────────────────────────────────────────────────────────
+
+const PINS_PATH = path.join(ANNOTATIONS_DIR, '_pins.json');
+
+function loadPins() {
+  if (!fs.existsSync(PINS_PATH)) return {};
+  try { return JSON.parse(fs.readFileSync(PINS_PATH, 'utf8')); } catch { return {}; }
+}
+
+function setPin(project, session, pinned) {
+  const pins = loadPins();
+  const key = `${project}__${session}`;
+  if (pinned) pins[key] = Date.now(); else delete pins[key];
+  atomicWrite(PINS_PATH, JSON.stringify(pins, null, 2));
+}
+
 // ── Session names ───────────────────────────────────────────────────────────
 
 function loadNames() {
@@ -192,6 +208,7 @@ app.get('/api/sessions/:project', (req, res) => {
     const projectDir = path.join(PROJECTS_DIR, req.params.project);
     const indexPath = path.join(projectDir, 'sessions-index.json');
     const names = loadNames();
+    const pins = loadPins();
     let sessions = [];
 
     if (fs.existsSync(indexPath)) {
@@ -224,6 +241,7 @@ app.get('/api/sessions/:project', (req, res) => {
       const stats = getSessionStats(path.join(projectDir, `${s.sessionId}.jsonl`));
       if (stats) Object.assign(s, stats);
       s.hasAnnotations = fs.existsSync(path.join(ANNOTATIONS_DIR, `${req.params.project}__${s.sessionId}.json`));
+      s.pinned = !!pins[nameKey];
     }
 
     sessions.sort((a, b) => new Date(b.modified || b.lastTs || 0) - new Date(a.modified || a.lastTs || 0));
@@ -349,12 +367,19 @@ app.get('/api/search', (req, res) => {
 app.get('/api/analytics', (req, res) => {
   try {
     const filterProject = req.query.project;
+    const dateFrom = req.query.from || '';  // YYYY-MM-DD
+    const dateTo = req.query.to || '';
     const dirs = filterProject
       ? [{ name: filterProject }]
       : fs.readdirSync(PROJECTS_DIR, { withFileTypes: true }).filter(d => d.isDirectory());
 
-    const byDay = {}, byModel = {};
+    const byDay = {}, byModel = {}, byTool = {}, byHour = {};
+    const topSessions = [];
     let totalCost = 0, totalInput = 0, totalOutput = 0, totalMsgs = 0, sessionCount = 0;
+    let totalToolCalls = 0, totalUserMsgs = 0, longestSession = 0;
+
+    // Init hourly heatmap: 7 days x 24 hours
+    for (let d = 0; d < 7; d++) for (let h = 0; h < 24; h++) byHour[`${d}-${h}`] = 0;
 
     for (const pd of dirs) {
       const projectDir = path.join(PROJECTS_DIR, typeof pd === 'string' ? pd : pd.name);
@@ -362,11 +387,46 @@ app.get('/api/analytics', (req, res) => {
       const jsonls = fs.readdirSync(projectDir).filter(f => f.endsWith('.jsonl'));
       sessionCount += jsonls.length;
       for (const f of jsonls) {
+        let sCost = 0, sMsgs = 0, sName = f.replace('.jsonl', '').slice(0, 8);
         try {
           for (const line of fs.readFileSync(path.join(projectDir, f), 'utf8').split('\n')) {
             if (!line) continue;
             const m = JSON.parse(line);
-            if (m.type !== 'assistant' || !m.message?.usage) continue;
+
+            // Date filter
+            if (m.timestamp) {
+              const day = m.timestamp.slice(0, 10);
+              if (dateFrom && day < dateFrom) continue;
+              if (dateTo && day > dateTo) continue;
+            }
+
+            // Heatmap: count messages by day-of-week and hour
+            if (m.timestamp && (m.type === 'user' || m.type === 'assistant')) {
+              const dt = new Date(m.timestamp);
+              const key = `${dt.getDay()}-${dt.getHours()}`;
+              byHour[key] = (byHour[key] || 0) + 1;
+            }
+
+            if (m.type === 'user' && m.message?.role === 'user' && typeof m.message.content === 'string') {
+              totalUserMsgs++;
+              if (!sName || sName.length <= 8) { const t = m.message.content.slice(0, 40); if (t.length > 3) sName = t; }
+            }
+
+            if (m.type !== 'assistant' || !m.message?.content) continue;
+            const content = m.message.content;
+            if (!Array.isArray(content)) continue;
+
+            // Tool usage
+            for (const b of content) {
+              if (b.type === 'tool_use') {
+                const name = b.name || 'unknown';
+                if (!byTool[name]) byTool[name] = { count: 0, cost: 0 };
+                byTool[name].count++;
+                totalToolCalls++;
+              }
+            }
+
+            if (!m.message.usage) continue;
             const u = m.message.usage, model = m.message.model || 'unknown';
             const cost = messageCost(model, u);
             const day = (m.timestamp || '').slice(0, 10) || 'unknown';
@@ -378,13 +438,28 @@ app.get('/api/analytics', (req, res) => {
             if (!byModel[model]) byModel[model] = { cost: 0, tokens: 0, msgs: 0 };
             byModel[model].cost += cost; byModel[model].tokens += inp + out; byModel[model].msgs++;
 
+            // Tool cost attribution
+            for (const b of content) {
+              if (b.type === 'tool_use' && byTool[b.name]) byTool[b.name].cost += cost / Math.max(1, content.filter(x => x.type === 'tool_use').length);
+            }
+
             totalCost += cost; totalInput += inp; totalOutput += out; totalMsgs++;
+            sCost += cost; sMsgs++;
           }
         } catch {}
+        if (sCost > 0) topSessions.push({ name: sName, cost: Math.round(sCost * 100) / 100, msgs: sMsgs });
+        if (sMsgs > longestSession) longestSession = sMsgs;
       }
     }
 
-    res.json({ totalCost: Math.round(totalCost * 100) / 100, totalInput, totalOutput, totalMsgs, sessionCount, byDay, byModel });
+    topSessions.sort((a, b) => b.cost - a.cost);
+
+    res.json({
+      totalCost: Math.round(totalCost * 100) / 100, totalInput, totalOutput, totalMsgs, sessionCount,
+      totalToolCalls, totalUserMsgs, longestSession,
+      byDay, byModel, byTool, byHour,
+      topSessions: topSessions.slice(0, 10),
+    });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
@@ -405,9 +480,10 @@ app.get('/api/bookmarks', (req, res) => {
       try { annotations = JSON.parse(fs.readFileSync(path.join(ANNOTATIONS_DIR, f), 'utf8')); } catch { continue; }
       const sessionName = names[`${project}__${session}`] || session.slice(0, 8);
 
-      if (type === 'favorites') {
+      if (type === 'favorites' || type === 'highlights') {
+        const key = type === 'favorites' ? 'favorite' : 'highlight';
         for (const [uuid, anno] of Object.entries(annotations)) {
-          if (uuid === '_meta' || !anno.favorite) continue;
+          if (uuid === '_meta' || !anno[key]) continue;
           let text = '', role = '', ts = '';
           const fp = path.join(PROJECTS_DIR, project, `${session}.jsonl`);
           if (fs.existsSync(fp)) {
@@ -417,33 +493,26 @@ app.get('/api/bookmarks', (req, res) => {
                 const m = JSON.parse(line);
                 if (m.uuid !== uuid) continue;
                 ts = m.timestamp || '';
-                if (m.type === 'user' && typeof m.message?.content === 'string') { text = m.message.content; role = 'user'; }
-                else if (m.type === 'assistant' && Array.isArray(m.message?.content)) { text = m.message.content.filter(b => b.type === 'text').map(b => b.text).join('\n'); role = 'assistant'; }
+                role = m.type === 'user' ? 'user' : 'assistant';
+                if (m.type === 'user' && typeof m.message?.content === 'string') { text = m.message.content; }
+                else if (m.type === 'assistant' && Array.isArray(m.message?.content)) {
+                  // Text blocks first
+                  text = m.message.content.filter(b => b.type === 'text').map(b => b.text).join('\n');
+                  // Fallback: describe tool calls
+                  if (!text) {
+                    const tools = m.message.content.filter(b => b.type === 'tool_use');
+                    if (tools.length) text = tools.map(t => `[${t.name}] ${(t.input?.description || t.input?.file_path || t.input?.command || t.input?.pattern || '').slice(0, 60)}`).join(', ');
+                  }
+                }
+                if (!text) text = `(${role} message)`;
                 break;
               } catch {}
             }
           }
-          if (text) results.push({ project, session, sessionName, uuid, role, text: text.slice(0, 200), ts });
-        }
-      } else if (type === 'highlights') {
-        for (const [uuid, anno] of Object.entries(annotations)) {
-          if (uuid === '_meta' || !anno.highlight) continue;
-          let text = '', role = '', ts = '';
-          const fp = path.join(PROJECTS_DIR, project, `${session}.jsonl`);
-          if (fs.existsSync(fp)) {
-            for (const line of fs.readFileSync(fp, 'utf8').split('\n')) {
-              if (!line) continue;
-              try {
-                const m = JSON.parse(line);
-                if (m.uuid !== uuid) continue;
-                ts = m.timestamp || '';
-                if (m.type === 'user' && typeof m.message?.content === 'string') { text = m.message.content; role = 'user'; }
-                else if (m.type === 'assistant' && Array.isArray(m.message?.content)) { text = m.message.content.filter(b => b.type === 'text').map(b => b.text).join('\n'); role = 'assistant'; }
-                break;
-              } catch {}
-            }
-          }
-          if (text) results.push({ project, session, sessionName, uuid, role, color: anno.highlight, text: text.slice(0, 200), ts });
+          if (!text) text = '(message)';
+          const entry = { project, session, sessionName, uuid, role, text: text.slice(0, 200), ts };
+          if (type === 'highlights') entry.color = anno.highlight;
+          results.push(entry);
         }
       } else if (type === 'notes') {
         // Per-message comments
@@ -553,6 +622,14 @@ function buildSessionsIndex(projectDir) {
   }
   return { version: 1, entries, originalPath };
 }
+
+app.put('/api/sessions/:project/:session/pin', (req, res) => {
+  try {
+    const { pinned } = req.body;
+    setPin(req.params.project, req.params.session, !!pinned);
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
 
 app.put('/api/sessions/:project/:session/rename', (req, res) => {
   try {

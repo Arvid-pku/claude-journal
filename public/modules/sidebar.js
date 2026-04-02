@@ -42,7 +42,8 @@ export async function loadSessions(projectId) {
 export function renderSessionList(projectId, sessions, container) {
   container.innerHTML = '';
   const query = document.getElementById('sidebar-search').value.toLowerCase();
-  // Sort based on settings
+
+  // Sort
   const sorted = [...sessions];
   switch (state.settings.sessionSort) {
     case 'oldest': sorted.sort((a, b) => new Date(a.modified || a.lastTs || 0) - new Date(b.modified || b.lastTs || 0)); break;
@@ -52,44 +53,67 @@ export function renderSessionList(projectId, sessions, container) {
     default: sorted.sort((a, b) => new Date(b.modified || b.lastTs || 0) - new Date(a.modified || a.lastTs || 0));
   }
 
-  for (const s of sorted) {
-    const title = s.customName || s.summary || s.firstPrompt || s.sessionId.slice(0, 8);
-    if (query && !title.toLowerCase().includes(query) && !s.sessionId.includes(query)) continue;
+  // Split pinned vs unpinned
+  const pinned = sorted.filter(s => s.pinned);
+  const unpinned = sorted.filter(s => !s.pinned);
 
-    const item = document.createElement('div');
-    item.className = 'session-item';
-    item.dataset.sessionId = s.sessionId;
-    item.dataset.projectId = projectId;
-
-    const dateRange = formatDateRange(s.firstTs || s.created, s.lastTs || s.modified);
-    const msgCount = s.messageCount || 0;
-    const totalTok = (s.inputTok || 0) + (s.outputTok || 0);
-    const cost = formatCost(s.cost);
-
-    const badges = s.hasAnnotations ? '<span class="session-badge" title="Has annotations">&#9679;</span>' : '';
-
-    item.innerHTML = `
-      <div class="session-top">
-        <span class="session-title" title="${escapeHtml(title)}">${escapeHtml(truncateText(title, 55))}</span>
-        ${badges}
-        <button class="session-menu-btn" title="Actions">&#8943;</button>
-      </div>
-      <span class="session-meta-line"><span>${dateRange}</span></span>
-      <span class="session-stats">
-        ${msgCount ? `<span>${msgCount} msgs</span>` : ''}
-        ${totalTok ? `<span>${formatNum(totalTok)} tok</span>` : ''}
-        ${cost ? `<span>${cost}</span>` : ''}
-      </span>`;
-
-    item.addEventListener('click', (e) => { if (!e.target.closest('.session-menu-btn') && onSessionSelect) onSessionSelect(projectId, s.sessionId); });
-    item.addEventListener('contextmenu', (e) => { e.preventDefault(); showContextMenu(e.clientX, e.clientY, projectId, s.sessionId); });
-    item.querySelector('.session-menu-btn').addEventListener('click', (e) => {
-      e.stopPropagation();
-      const r = e.target.getBoundingClientRect();
-      showContextMenu(r.right, r.bottom, projectId, s.sessionId);
-    });
-    container.appendChild(item);
+  if (pinned.length) {
+    const label = document.createElement('div');
+    label.className = 'session-group-label';
+    label.textContent = 'Pinned';
+    container.appendChild(label);
+    for (const s of pinned) appendSessionItem(container, projectId, s, query);
   }
+
+  if (unpinned.length && pinned.length) {
+    const label = document.createElement('div');
+    label.className = 'session-group-label';
+    label.textContent = 'Recents';
+    container.appendChild(label);
+  }
+
+  for (const s of unpinned) appendSessionItem(container, projectId, s, query);
+}
+
+function appendSessionItem(container, projectId, s, query) {
+  const title = s.customName || s.summary || s.firstPrompt || s.sessionId.slice(0, 8);
+  if (query && !title.toLowerCase().includes(query) && !s.sessionId.includes(query)) return;
+
+  const item = document.createElement('div');
+  item.className = `session-item${s.pinned ? ' pinned' : ''}`;
+  item.dataset.sessionId = s.sessionId;
+  item.dataset.projectId = projectId;
+
+  const dateRange = formatDateRange(s.firstTs || s.created, s.lastTs || s.modified);
+  const msgCount = s.messageCount || 0;
+  const totalTok = (s.inputTok || 0) + (s.outputTok || 0);
+  const cost = formatCost(s.cost);
+  const badges = [
+    s.pinned ? '<span class="session-badge pin" title="Pinned">&#128204;</span>' : '',
+    s.hasAnnotations ? '<span class="session-badge" title="Has annotations">&#9679;</span>' : '',
+  ].join('');
+
+  item.innerHTML = `
+    <div class="session-top">
+      <span class="session-title" title="${escapeHtml(title)}">${escapeHtml(truncateText(title, 55))}</span>
+      ${badges}
+      <button class="session-menu-btn" title="Actions">&#8943;</button>
+    </div>
+    <span class="session-meta-line"><span>${dateRange}</span></span>
+    <span class="session-stats">
+      ${msgCount ? `<span>${msgCount} msgs</span>` : ''}
+      ${totalTok ? `<span>${formatNum(totalTok)} tok</span>` : ''}
+      ${cost ? `<span>${cost}</span>` : ''}
+    </span>`;
+
+  item.addEventListener('click', (e) => { if (!e.target.closest('.session-menu-btn') && onSessionSelect) onSessionSelect(projectId, s.sessionId); });
+  item.addEventListener('contextmenu', (e) => { e.preventDefault(); showContextMenu(e.clientX, e.clientY, projectId, s.sessionId); });
+  item.querySelector('.session-menu-btn').addEventListener('click', (e) => {
+    e.stopPropagation();
+    const r = e.target.getBoundingClientRect();
+    showContextMenu(r.right, r.bottom, projectId, s.sessionId);
+  });
+  container.appendChild(item);
 }
 
 export function updateSidebarActive() {
@@ -103,6 +127,10 @@ export function updateSidebarActive() {
 export function showContextMenu(x, y, projectId, sessionId) {
   state.ctxTarget = { projectId, sessionId };
   const menu = document.getElementById('context-menu');
+  // Update pin label
+  const s = (state.sessions[projectId] || []).find(s => s.sessionId === sessionId);
+  const pinLabel = menu.querySelector('.ctx-pin-label');
+  if (pinLabel) pinLabel.textContent = s?.pinned ? 'Unpin' : 'Pin';
   menu.classList.remove('hidden');
   const mw = menu.offsetWidth, mh = menu.offsetHeight;
   menu.style.left = (x + mw > innerWidth ? innerWidth - mw - 8 : x) + 'px';
@@ -121,6 +149,17 @@ async function refreshProject(projectId) {
   const fresh = await loadSessions(projectId);
   const container = document.querySelector(`.project-sessions[data-project="${projectId}"]`);
   if (container) renderSessionList(projectId, fresh, container);
+}
+
+export async function pinSession() {
+  if (!state.ctxTarget) return;
+  const { projectId, sessionId } = state.ctxTarget;
+  hideContextMenu();
+  const s = (state.sessions[projectId] || []).find(s => s.sessionId === sessionId);
+  const newPinned = !(s?.pinned);
+  await apiPut(`/api/sessions/${encodeURIComponent(projectId)}/${encodeURIComponent(sessionId)}/pin`, { pinned: newPinned });
+  if (s) s.pinned = newPinned;
+  await refreshProject(projectId);
 }
 
 export async function renameSession() {
