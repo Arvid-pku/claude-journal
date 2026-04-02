@@ -216,15 +216,14 @@ app.get('/api/projects', (_req, res) => {
         const indexPath = path.join(PROJECTS_DIR, name, 'sessions-index.json');
         let decodedPath = '/' + name.replace(/^-/, '').replace(/-/g, '/');
         let meta = { projectPath: decodedPath, sessionCount: 0, hasMemory: false };
-        if (fs.existsSync(indexPath)) {
-          try {
+        try {
+          const actualCount = fs.readdirSync(path.join(PROJECTS_DIR, name)).filter(f => f.endsWith('.jsonl')).length;
+          if (fs.existsSync(indexPath)) {
             const index = JSON.parse(fs.readFileSync(indexPath, 'utf8'));
             meta.projectPath = index.originalPath || meta.projectPath;
-            meta.sessionCount = index.entries?.length || 0;
-          } catch {}
-        } else {
-          try { meta.sessionCount = fs.readdirSync(path.join(PROJECTS_DIR, name)).filter(f => f.endsWith('.jsonl')).length; } catch {}
-        }
+          }
+          meta.sessionCount = actualCount;
+        } catch {}
         meta.hasMemory = fs.existsSync(path.join(PROJECTS_DIR, name, 'memory'));
         return { id: name, ...meta };
       })
@@ -248,28 +247,37 @@ app.get('/api/sessions/:project', (req, res) => {
     const pins = loadPins();
     let sessions = [];
 
+    const actualFiles = new Set(fs.readdirSync(projectDir).filter(f => f.endsWith('.jsonl')).map(f => f.replace('.jsonl', '')));
+
+    function sessionFromFile(sessionId) {
+      const stat = fs.statSync(path.join(projectDir, `${sessionId}.jsonl`));
+      let summary = 'Untitled';
+      try {
+        const content = fs.readFileSync(path.join(projectDir, `${sessionId}.jsonl`), 'utf8');
+        for (const line of content.split('\n')) {
+          if (!line) continue;
+          const m = JSON.parse(line);
+          if (m.type === 'user' && m.message?.content && typeof m.message.content === 'string') { summary = m.message.content.slice(0, 120); break; }
+        }
+      } catch {}
+      return { sessionId, summary, firstPrompt: summary, created: stat.birthtime.toISOString(), modified: stat.mtime.toISOString() };
+    }
+
     if (fs.existsSync(indexPath)) {
       const index = JSON.parse(fs.readFileSync(indexPath, 'utf8'));
-      sessions = (index.entries || []).map(e => ({
-        sessionId: e.sessionId, summary: e.summary || e.firstPrompt || 'Untitled',
-        firstPrompt: e.firstPrompt || '', created: e.created, modified: e.modified, gitBranch: e.gitBranch || '',
-      }));
+      const indexedIds = new Set();
+      for (const e of (index.entries || [])) {
+        if (!actualFiles.has(e.sessionId)) continue; // skip stale index entries with no file
+        indexedIds.add(e.sessionId);
+        sessions.push({ sessionId: e.sessionId, summary: e.summary || e.firstPrompt || 'Untitled',
+          firstPrompt: e.firstPrompt || '', created: e.created, modified: e.modified, gitBranch: e.gitBranch || '' });
+      }
+      // pick up any .jsonl files the index doesn't know about
+      for (const sessionId of actualFiles) {
+        if (!indexedIds.has(sessionId)) sessions.push(sessionFromFile(sessionId));
+      }
     } else {
-      const files = fs.readdirSync(projectDir).filter(f => f.endsWith('.jsonl'));
-      sessions = files.map(f => {
-        const sessionId = f.replace('.jsonl', '');
-        const stat = fs.statSync(path.join(projectDir, f));
-        let summary = 'Untitled';
-        try {
-          const content = fs.readFileSync(path.join(projectDir, f), 'utf8');
-          for (const line of content.split('\n')) {
-            if (!line) continue;
-            const m = JSON.parse(line);
-            if (m.type === 'user' && m.message?.content && typeof m.message.content === 'string') { summary = m.message.content.slice(0, 120); break; }
-          }
-        } catch {}
-        return { sessionId, summary, firstPrompt: summary, created: stat.birthtime.toISOString(), modified: stat.mtime.toISOString() };
-      });
+      for (const sessionId of actualFiles) sessions.push(sessionFromFile(sessionId));
     }
 
     for (const s of sessions) {
