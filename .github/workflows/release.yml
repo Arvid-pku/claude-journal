@@ -79,3 +79,19 @@ jobs:
         with:
           files: artifacts/*
           generate_release_notes: true
+          body: |
+            ## Install
+
+            **Recommended:** `npx claude-journal` (no download needed)
+
+            **Desktop app downloads below.**
+
+            ### macOS note
+            The .dmg is not code-signed. macOS will show "damaged" or "unidentified developer". Run this after opening the .dmg:
+            ```
+            xattr -cr "/Applications/Claude Journal.app"
+            ```
+            Then open the app again.
+
+            ### Linux
+            Make the AppImage executable: `chmod +x Claude-Journal-*.AppImage`
