@@ -266,7 +266,7 @@ function kbTurn(dir) {
 
 function setupEvents() {
   // Message actions
-  document.getElementById('messages').addEventListener('click', (e) => {
+  document.getElementById('messages').addEventListener('click', async (e) => {
     const btn = e.target.closest('[data-action]');
     if (!btn) return;
     const { action, uuid } = btn.dataset;

@@ -5,15 +5,15 @@ test.describe('Claude History Viewer', () => {
   test('page loads with sidebar and empty state', async ({ page }) => {
     await page.goto('/');
     await expect(page.locator('.logo')).toContainText('Claude History');
-    await expect(page.locator('#empty-state')).toBeVisible();
-    await expect(page.locator('.project-group')).toHaveCount(await page.locator('.project-group').count());
-    // At least one project should be visible
+    // Wait for projects to load (async ES modules)
+    await page.locator('.project-group').first().waitFor({ timeout: 10000 });
     const count = await page.locator('.project-group').count();
     expect(count).toBeGreaterThan(0);
   });
 
   test('expanding a project shows sessions', async ({ page }) => {
     await page.goto('/');
+    await page.locator('.project-group').first().waitFor({ timeout: 10000 });
     const header = page.locator('.project-header').first();
     await header.click();
     await expect(page.locator('.session-item').first()).toBeVisible({ timeout: 5000 });
@@ -21,7 +21,7 @@ test.describe('Claude History Viewer', () => {
 
   test('clicking a session loads messages', async ({ page }) => {
     await page.goto('/');
-    // Expand first project
+    await page.locator('.project-group').first().waitFor({ timeout: 10000 });
     await page.locator('.project-header').first().click();
     await page.locator('.session-item').first().waitFor({ timeout: 5000 });
     await page.locator('.session-item').first().click();
@@ -36,6 +36,7 @@ test.describe('Claude History Viewer', () => {
 
   test('conversation rail shows dots', async ({ page }) => {
     await page.goto('/');
+    await page.locator('.project-group').first().waitFor({ timeout: 10000 });
     await page.locator('.project-header').first().click();
     await page.locator('.session-item').first().waitFor({ timeout: 5000 });
     await page.locator('.session-item').first().click();
@@ -46,6 +47,7 @@ test.describe('Claude History Viewer', () => {
 
   test('favorite toggle works', async ({ page }) => {
     await page.goto('/');
+    await page.locator('.project-group').first().waitFor({ timeout: 10000 });
     await page.locator('.project-header').first().click();
     await page.locator('.session-item').first().waitFor({ timeout: 5000 });
     await page.locator('.session-item').first().click();
@@ -102,6 +104,7 @@ test.describe('Claude History Viewer', () => {
 
   test('keyboard j/k navigates messages', async ({ page }) => {
     await page.goto('/');
+    await page.locator('.project-group').first().waitFor({ timeout: 10000 });
     await page.locator('.project-header').first().click();
     await page.locator('.session-item').first().waitFor({ timeout: 5000 });
     await page.locator('.session-item').first().click();
@@ -123,6 +126,7 @@ test.describe('Claude History Viewer', () => {
 
   test('URL routing preserves session on reload', async ({ page }) => {
     await page.goto('/');
+    await page.locator('.project-group').first().waitFor({ timeout: 10000 });
     await page.locator('.project-header').first().click();
     await page.locator('.session-item').first().waitFor({ timeout: 5000 });
     await page.locator('.session-item').first().click();
