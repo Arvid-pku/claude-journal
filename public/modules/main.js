@@ -167,6 +167,7 @@ const SETTING_FIELDS = [
 
 async function showSettings() {
   const s = { ...DEFAULTS, ...(await api('/api/settings')) };
+  document.getElementById('setting-theme').value = document.documentElement.dataset.theme || 'dark';
   for (const f of SETTING_FIELDS) {
     const el = document.getElementById(f.id);
     if (!el) continue;
@@ -190,6 +191,10 @@ async function saveSettings() {
     const saved = await apiPut('/api/settings', payload);
     state.settings = { ...DEFAULTS, ...saved };
     applySettings();
+    // Apply theme
+    const theme = document.getElementById('setting-theme').value;
+    document.documentElement.dataset.theme = theme;
+    localStorage.setItem('theme', theme);
     hideModal('settings-modal');
     if (state.displayMessages.length) renderMessages();
     for (const [pid, sessions] of Object.entries(state.sessions)) {
@@ -202,19 +207,38 @@ async function saveSettings() {
 
 // ── Sidebar Tabs (Starred / Notes) ──────────────────────────────────────
 
-async function switchSidebarTab(tab) {
-  document.querySelectorAll('.sidebar-tab').forEach(t => t.classList.toggle('active', t.dataset.tab === tab));
-  document.getElementById('project-list').classList.toggle('hidden', tab !== 'sessions');
-  document.getElementById('sidebar-starred').classList.toggle('hidden', tab !== 'starred');
-  document.getElementById('sidebar-notes').classList.toggle('hidden', tab !== 'notes');
+async function toggleSidebarPanel(panel) {
+  const el = document.getElementById(`sidebar-${panel}`);
+  const btn = document.querySelector(`.sidebar-action-btn[data-tab="${panel}"]`);
+  const other = panel === 'starred' ? 'notes' : 'starred';
+  const otherEl = document.getElementById(`sidebar-${other}`);
+  const otherBtn = document.querySelector(`.sidebar-action-btn[data-tab="${other}"]`);
 
-  if (tab === 'starred') {
-    const el = document.getElementById('sidebar-starred');
-    el.innerHTML = '<div style="padding:16px;color:var(--text-muted);font-size:12px">Loading...</div>';
+  // Close other panel
+  otherEl?.classList.add('hidden');
+  otherBtn?.classList.remove('active');
+
+  // Toggle this panel
+  const opening = el.classList.contains('hidden');
+  el.classList.toggle('hidden');
+  btn?.classList.toggle('active', opening);
+
+  if (!opening) return;
+
+  // Load content
+  el.innerHTML = `<div class="sidebar-panel-close"><span>${panel === 'starred' ? 'Starred' : 'Notes'}</span><button data-close="${panel}">&times;</button></div><div style="padding:16px;color:var(--text-muted);font-size:12px">Loading...</div>`;
+
+  el.querySelector(`[data-close="${panel}"]`)?.addEventListener('click', () => {
+    el.classList.add('hidden');
+    btn?.classList.remove('active');
+  });
+
+  if (panel === 'starred') {
     try {
       const items = await api('/api/bookmarks?type=favorites');
-      if (!items.length) { el.innerHTML = '<div style="padding:16px;color:var(--text-muted);font-size:12px">No starred messages</div>'; return; }
-      el.innerHTML = items.map(item => `
+      const content = el.querySelector('.sidebar-panel-close').outerHTML;
+      if (!items.length) { el.innerHTML = content + '<div style="padding:16px;color:var(--text-muted);font-size:12px">No starred messages</div>'; return; }
+      el.innerHTML = content + items.map(item => `
         <div class="bookmark-item" data-project="${escapeHtml(item.project)}" data-session="${item.session}" data-uuid="${item.uuid}">
           <div class="bookmark-header">
             <span class="bookmark-role ${item.role}">${item.role === 'user' ? 'You' : 'Claude'}</span>
@@ -222,43 +246,37 @@ async function switchSidebarTab(tab) {
             <span class="bookmark-time">${item.ts ? new Date(item.ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}</span>
           </div>
           <div class="bookmark-text">${escapeHtml(item.text.slice(0, 120))}</div>
-        </div>
-      `).join('');
-      el.querySelectorAll('.bookmark-item').forEach(bi => bi.addEventListener('click', () => {
-        navigate('session', { projectId: bi.dataset.project, sessionId: bi.dataset.session });
-        loadSession(bi.dataset.project, bi.dataset.session).then(() => {
-          setTimeout(() => {
-            const msg = document.querySelector(`.message[data-uuid="${bi.dataset.uuid}"]`);
-            if (msg) { msg.scrollIntoView({ behavior: 'smooth', block: 'center' }); msg.querySelector('.message-inner')?.classList.add('flash'); }
-          }, 300);
-        });
-      }));
-    } catch { el.innerHTML = '<div style="padding:16px;color:var(--red);font-size:12px">Failed to load</div>'; }
-  }
-
-  if (tab === 'notes') {
-    const el = document.getElementById('sidebar-notes');
-    el.innerHTML = '<div style="padding:16px;color:var(--text-muted);font-size:12px">Loading...</div>';
+        </div>`).join('');
+    } catch { /* keep loading text */ }
+  } else {
     try {
       const items = await api('/api/bookmarks?type=notes');
-      if (!items.length) { el.innerHTML = '<div style="padding:16px;color:var(--text-muted);font-size:12px">No sessions with notes</div>'; return; }
-      el.innerHTML = items.map(item => `
+      const content = el.querySelector('.sidebar-panel-close').outerHTML;
+      if (!items.length) { el.innerHTML = content + '<div style="padding:16px;color:var(--text-muted);font-size:12px">No sessions with notes</div>'; return; }
+      el.innerHTML = content + items.map(item => `
         <div class="bookmark-item" data-project="${escapeHtml(item.project)}" data-session="${item.session}">
-          <div class="bookmark-header">
-            <span class="bookmark-session">${escapeHtml(item.sessionName)}</span>
-          </div>
+          <div class="bookmark-header"><span class="bookmark-session">${escapeHtml(item.sessionName)}</span></div>
           <div class="bookmark-meta">
-            ${item.hasSessionNote ? '<span>Has session note</span>' : ''}
-            ${item.colorNoteCount ? `<span>${item.colorNoteCount} highlight note${item.colorNoteCount > 1 ? 's' : ''}</span>` : ''}
+            ${item.hasSessionNote ? '<span>Session note</span>' : ''}
+            ${item.colorNoteCount ? `<span>${item.colorNoteCount} comment${item.colorNoteCount > 1 ? 's' : ''}</span>` : ''}
           </div>
-        </div>
-      `).join('');
-      el.querySelectorAll('.bookmark-item').forEach(bi => bi.addEventListener('click', () => {
-        navigate('session', { projectId: bi.dataset.project, sessionId: bi.dataset.session });
-        loadSession(bi.dataset.project, bi.dataset.session);
-      }));
-    } catch { el.innerHTML = '<div style="padding:16px;color:var(--red);font-size:12px">Failed to load</div>'; }
+        </div>`).join('');
+    } catch { /* keep loading text */ }
   }
+
+  // Re-wire close button (innerHTML replaced)
+  el.querySelector(`[data-close="${panel}"]`)?.addEventListener('click', () => { el.classList.add('hidden'); btn?.classList.remove('active'); });
+
+  // Wire bookmark clicks
+  el.querySelectorAll('.bookmark-item').forEach(bi => bi.addEventListener('click', () => {
+    navigate('session', { projectId: bi.dataset.project, sessionId: bi.dataset.session });
+    loadSession(bi.dataset.project, bi.dataset.session).then(() => {
+      if (bi.dataset.uuid) setTimeout(() => {
+        const msg = document.querySelector(`.message[data-uuid="${bi.dataset.uuid}"]`);
+        if (msg) { msg.scrollIntoView({ behavior: 'smooth', block: 'center' }); msg.querySelector('.message-inner')?.classList.add('flash'); }
+      }, 300);
+    });
+  }));
 }
 
 // ── Export ───────────────────────────────────────────────────────────────
@@ -458,15 +476,28 @@ function setupEvents() {
   });
   document.getElementById('btn-settings').addEventListener('click', showSettings);
   document.getElementById('settings-save').addEventListener('click', saveSettings);
-  document.getElementById('btn-theme').addEventListener('click', () => {
+  // Theme toggle moved to settings — add as setting field
+  document.getElementById('btn-theme')?.addEventListener('click', () => {
     const html = document.documentElement; html.dataset.theme = html.dataset.theme === 'dark' ? 'light' : 'dark';
     localStorage.setItem('theme', html.dataset.theme);
   });
-  document.getElementById('btn-sidebar-toggle').addEventListener('click', () => document.getElementById('sidebar').classList.toggle('collapsed'));
+  document.getElementById('btn-sidebar-close').addEventListener('click', () => document.getElementById('sidebar').classList.add('collapsed'));
+  document.getElementById('btn-sidebar-open').addEventListener('click', () => document.getElementById('sidebar').classList.remove('collapsed'));
+  document.getElementById('btn-settings-mini').addEventListener('click', showSettings);
 
-  // Sidebar tabs
-  document.querySelectorAll('.sidebar-tab').forEach(tab => {
-    tab.addEventListener('click', () => switchSidebarTab(tab.dataset.tab));
+  // Sidebar action buttons (Starred / Notes) - toggle panels
+  document.querySelectorAll('.sidebar-action-btn').forEach(btn => {
+    btn.addEventListener('click', () => toggleSidebarPanel(btn.dataset.tab));
+  });
+
+  // Mini sidebar actions
+  document.querySelectorAll('.mini-action').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const action = btn.dataset.mini;
+      document.getElementById('sidebar').classList.remove('collapsed'); // expand first
+      if (action === 'search') setTimeout(() => document.getElementById('sidebar-search').querySelector('input')?.focus(), 200);
+      else if (action === 'starred' || action === 'notes') setTimeout(() => toggleSidebarPanel(action), 200);
+    });
   });
 
   // Sidebar search
