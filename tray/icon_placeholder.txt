@@ -1,0 +1,1 @@
+Place a 32x32 or 64x64 PNG icon here as icon.png

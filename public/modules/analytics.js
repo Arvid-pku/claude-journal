@@ -130,8 +130,8 @@ function renderCostChart(data) {
       <h3>Daily Cost</h3>
       <div class="bar-chart-wrap"><div class="bar-chart">${days.map(([day, v]) => {
         const pct = (v.cost / max * 100).toFixed(1);
-        return `<div class="bar-col" title="${day}: ${formatCost(v.cost)} (${v.msgs} calls)"><div class="bar" style="height:${pct}%"></div><div class="bar-label">${day.slice(5)}</div></div>`;
-      }).join('')}</div></div>
+        return `<div class="bar-col" title="${day}: ${formatCost(v.cost)} (${v.msgs} calls)"><div class="bar" style="height:${pct}%"></div></div>`;
+      }).join('')}</div><div class="bar-labels">${days.map(([day]) => `<div class="bar-label">${day.slice(5)}</div>`).join('')}</div></div>
     </div>`;
 }
 
@@ -147,8 +147,8 @@ function renderTokenChart(data) {
       <div class="bar-chart-wrap"><div class="bar-chart">${days.map(([day, v]) => {
         const inP = (v.input / max * 100).toFixed(1);
         const outP = (v.output / max * 100).toFixed(1);
-        return `<div class="bar-col" title="${day}: ${formatNum(v.input)} in / ${formatNum(v.output)} out"><div class="bar-stack"><div class="bar bar-input" style="height:${inP}%"></div><div class="bar bar-output" style="height:${outP}%"></div></div><div class="bar-label">${day.slice(5)}</div></div>`;
-      }).join('')}</div></div>
+        return `<div class="bar-col" title="${day}: ${formatNum(v.input)} in / ${formatNum(v.output)} out"><div class="bar-stack"><div class="bar bar-input" style="height:${inP}%"></div><div class="bar bar-output" style="height:${outP}%"></div></div></div>`;
+      }).join('')}</div><div class="bar-labels">${days.map(([day]) => `<div class="bar-label">${day.slice(5)}</div>`).join('')}</div></div>
       <div class="chart-legend"><span class="legend-item"><span class="legend-dot" style="background:var(--accent)"></span>Input</span><span class="legend-item"><span class="legend-dot" style="background:var(--green)"></span>Output</span></div>
     </div>`;
 }

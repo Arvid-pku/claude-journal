@@ -137,7 +137,9 @@ function createMessageEl(msg) {
     const comment = document.createElement('div');
     comment.className = 'msg-comment';
     if (anno.highlight) comment.style.setProperty('--comment-color', anno.highlight);
-    comment.innerHTML = `<textarea class="comment-input" data-uuid="${msg.uuid}">${escapeHtml(commentText)}</textarea><button class="comment-delete" data-action="delete-comment" data-uuid="${msg.uuid}" title="Remove">&times;</button>`;
+    const lines = commentText.split('\n').length;
+    const h = Math.min(Math.max(60, lines * 20 + 20), window.innerHeight * 0.6);
+    comment.innerHTML = `<textarea class="comment-input" data-uuid="${msg.uuid}" style="height:${h}px">${escapeHtml(commentText)}</textarea><button class="comment-delete" data-action="delete-comment" data-uuid="${msg.uuid}" title="Remove">&times;</button>`;
     div.appendChild(comment);
   }
 

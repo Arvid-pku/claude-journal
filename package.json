@@ -9,7 +9,8 @@
   "scripts": {
     "start": "node server.js",
     "dev": "node server.js",
-    "test": "playwright test"
+    "test": "playwright test",
+    "build": "npx pkg bin/cli.js --targets node18-macos-x64,node18-macos-arm64,node18-linux-x64,node18-win-x64 --out-path dist --compress GZip"
   },
   "keywords": [
     "claude", "claude-code", "conversation", "history", "journal",

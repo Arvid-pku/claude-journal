@@ -1,0 +1,7 @@
+[Desktop Entry]
+Name=Claude Journal
+Comment=View and analyze Claude Code conversations
+Exec=bash -c 'cd "$(dirname "$(readlink -f "%k")")/.." && node bin/cli.js --open'
+Terminal=false
+Type=Application
+Categories=Development;

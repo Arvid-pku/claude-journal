@@ -1,5 +1,5 @@
 import { state, DEFAULTS, api, apiPost, apiPut, apiDelete, IC, setAfterRender, setOnSessionSelect,
-  showModal, hideModal, renderMarkdown, escapeHtml, applySettings } from './state.js';
+  showModal, hideModal, renderMarkdown, escapeHtml, shortenPath, formatCost, applySettings } from './state.js';
 import { renderSidebar, loadSessions, renderSessionList, updateSidebarActive,
   hideContextMenu, pinSession, renameSession, duplicateSession, moveSession, deleteSession, setupResize } from './sidebar.js';
 import { processMessages, renderMessages, updateSessionInfo, updateStats, startEditing } from './messages.js';
@@ -73,13 +73,105 @@ async function loadSession(projectId, sessionId) {
 
 async function handleRoute(route) {
   if (!route) return;
-  if (route.page === 'session') {
+  if (route.page === 'home') {
+    showHome();
+  } else if (route.page === 'session') {
     await loadSession(route.projectId, route.sessionId);
   } else if (route.page === 'analytics') {
+    clearSessionContext();
     await showAnalytics(route.projectId);
   } else if (route.page === 'search') {
     openSearch(route.query);
   }
+}
+
+function clearSessionContext() {
+  state.currentSession = null;
+  state.displayMessages = [];
+  document.getElementById('session-title').textContent = '';
+  document.getElementById('session-meta').textContent = '';
+  document.getElementById('conv-rail').innerHTML = '';
+  document.getElementById('notes-panel').classList.add('hidden');
+  updateSidebarActive();
+}
+
+function goHome() {
+  state.currentProject = null;
+  clearSessionContext();
+  navigate('home');
+  showHome();
+}
+
+async function showHome() {
+  const container = document.getElementById('messages');
+
+  // Gather quick stats
+  let totalSessions = 0, totalCost = 0;
+  for (const p of state.projects) totalSessions += p.sessionCount || 0;
+
+  // Recent sessions across all projects
+  const recentSessions = [];
+  for (const p of state.projects) {
+    if (!state.sessions[p.id]) {
+      try { state.sessions[p.id] = await api(`/api/sessions/${encodeURIComponent(p.id)}`); } catch { continue; }
+    }
+    for (const s of state.sessions[p.id]) {
+      recentSessions.push({ ...s, projectId: p.id, projectPath: p.projectPath });
+      totalCost += s.cost || 0;
+    }
+  }
+  recentSessions.sort((a, b) => new Date(b.modified || b.lastTs || 0) - new Date(a.modified || a.lastTs || 0));
+
+  container.innerHTML = `
+    <div class="home-page">
+      <div class="home-hero">
+        <h1>Claude Journal</h1>
+        <p>View, annotate, search, and analyze your Claude Code conversations</p>
+      </div>
+      <div class="home-stats">
+        <div class="acard"><div class="acard-value">${state.projects.length}</div><div class="acard-label">Projects</div></div>
+        <div class="acard"><div class="acard-value">${totalSessions}</div><div class="acard-label">Sessions</div></div>
+        <div class="acard"><div class="acard-value">${formatCost(totalCost)}</div><div class="acard-label">Total Cost</div></div>
+      </div>
+      <div class="home-section">
+        <h3>Recent Sessions</h3>
+        <div class="home-recent">
+          ${recentSessions.slice(0, 10).map(s => {
+            const title = s.customName || s.summary || s.sessionId.slice(0, 8);
+            const project = shortenPath(s.projectPath);
+            const date = s.lastTs || s.modified;
+            const dateStr = date ? new Date(date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : '';
+            return `<div class="home-session" data-project="${escapeHtml(s.projectId)}" data-session="${s.sessionId}">
+              <div class="home-session-title">${escapeHtml(title.slice(0, 80))}</div>
+              <div class="home-session-meta"><span>${escapeHtml(project)}</span><span>${dateStr}</span>${s.cost ? `<span>${formatCost(s.cost)}</span>` : ''}</div>
+            </div>`;
+          }).join('')}
+        </div>
+      </div>
+      <div class="home-shortcuts">
+        <h3>Keyboard Shortcuts</h3>
+        <div class="shortcut-grid">
+          <div><kbd>/</kbd> Global search</div>
+          <div><kbd>j</kbd> <kbd>k</kbd> Navigate messages</div>
+          <div><kbd>n</kbd> <kbd>p</kbd> Navigate turns</div>
+          <div><kbd>Ctrl+F</kbd> Search in session</div>
+          <div><kbd>Ctrl+B</kbd> Toggle sidebar</div>
+          <div><kbd>Ctrl+E</kbd> Export session</div>
+          <div><kbd>g</kbd> <kbd>a</kbd> Analytics</div>
+          <div><kbd>g</kbd> <kbd>m</kbd> Memory</div>
+          <div><kbd>g</kbd> <kbd>n</kbd> Notes panel</div>
+          <div><kbd>g</kbd> <kbd>h</kbd> Home</div>
+        </div>
+      </div>
+    </div>`;
+
+  // Wire session clicks
+  container.querySelectorAll('.home-session').forEach(el => {
+    el.addEventListener('click', () => {
+      navigate('session', { projectId: el.dataset.project, sessionId: el.dataset.session });
+      loadSession(el.dataset.project, el.dataset.session);
+    });
+  });
 }
 
 onRouteChange(handleRoute);
@@ -273,7 +365,11 @@ async function toggleSidebarPanel(panel) {
   if (!opening) return;
 
   el.innerHTML = `<div class="sidebar-panel-close"><span>${PANEL_LABELS[panel]}</span><button data-close="${panel}">&times;</button></div><div style="padding:16px;color:var(--text-muted);font-size:12px">Loading...</div>`;
-  el.querySelector(`[data-close="${panel}"]`)?.addEventListener('click', () => { el.classList.add('hidden'); btn?.classList.remove('active'); });
+
+  // Use delegated click handler on the panel — survives innerHTML replacements
+  el.onclick = (e) => {
+    if (e.target.closest(`[data-close="${panel}"]`)) { el.classList.add('hidden'); btn?.classList.remove('active'); }
+  };
 
   try {
     const items = await api(`/api/bookmarks?type=${PANEL_TYPES[panel]}`);
@@ -317,9 +413,6 @@ async function toggleSidebarPanel(panel) {
         </div>`).join('');
     }
   } catch { /* keep loading text */ }
-
-  // Re-wire close button
-  el.querySelector(`[data-close="${panel}"]`)?.addEventListener('click', () => { el.classList.add('hidden'); btn?.classList.remove('active'); });
 
   // Wire bookmark clicks
   el.querySelectorAll('.bookmark-item').forEach(bi => bi.addEventListener('click', () => {
@@ -432,8 +525,11 @@ function setupEvents() {
           if (anno.highlight) card.style.setProperty('--comment-color', anno.highlight);
           card.innerHTML = `<textarea class="comment-input" data-uuid="${uuid}" placeholder="Add comment..."></textarea><button class="comment-delete" data-action="delete-comment" data-uuid="${uuid}" title="Remove">&times;</button>`;
           msgEl.appendChild(card);
-          // Update has-comments class
           document.getElementById('messages').classList.add('has-comments');
+          // Auto-size to match message height, capped at viewport
+          const msgH = msgEl.querySelector('.message-inner')?.offsetHeight || 120;
+          const input = card.querySelector('.comment-input');
+          input.style.height = Math.min(Math.max(60, msgH - 20), window.innerHeight * 0.6) + 'px';
         }
         card.classList.remove('hidden');
         card.querySelector('.comment-input').focus();
@@ -563,10 +659,12 @@ function setupEvents() {
   document.getElementById('btn-export').addEventListener('click', exportSession);
   document.getElementById('btn-notes').addEventListener('click', toggleNotesPanel);
   document.getElementById('btn-memory').addEventListener('click', showMemory);
-  document.getElementById('btn-analytics').addEventListener('click', () => {
-    const pid = state.currentProject || null;
-    navigate('analytics', { projectId: pid });
-    showAnalytics(pid);
+  document.getElementById('btn-home').addEventListener('click', goHome);
+  document.getElementById('logo-home').addEventListener('click', goHome);
+  document.getElementById('btn-analytics-sidebar').addEventListener('click', () => {
+    clearSessionContext();
+    navigate('analytics', { projectId: state.currentProject });
+    showAnalytics(state.currentProject);
   });
   document.getElementById('btn-settings').addEventListener('click', showSettings);
   document.getElementById('settings-save').addEventListener('click', saveSettings);
@@ -589,9 +687,11 @@ function setupEvents() {
   document.querySelectorAll('.mini-action').forEach(btn => {
     btn.addEventListener('click', () => {
       const action = btn.dataset.mini;
-      document.getElementById('sidebar').classList.remove('collapsed'); // expand first
+      if (action === 'home') { goHome(); return; }
+      if (action === 'analytics') { clearSessionContext(); navigate('analytics', { projectId: state.currentProject }); showAnalytics(state.currentProject); return; }
+      document.getElementById('sidebar').classList.remove('collapsed');
       if (action === 'search') setTimeout(() => document.getElementById('sidebar-search').querySelector('input')?.focus(), 200);
-      else if (action === 'starred' || action === 'notes') setTimeout(() => toggleSidebarPanel(action), 200);
+      else if (action === 'starred' || action === 'highlights' || action === 'notes') setTimeout(() => toggleSidebarPanel(action), 200);
     });
   });
 
@@ -637,8 +737,9 @@ function setupEvents() {
       // Wait for second key
       const handler = (e2) => {
         document.removeEventListener('keydown', handler);
+        if (e2.key === 'h') { e2.preventDefault(); goHome(); }
         if (e2.key === 's') { e2.preventDefault(); showSettings(); }
-        if (e2.key === 'a') { e2.preventDefault(); navigate('analytics', { projectId: state.currentProject }); showAnalytics(state.currentProject); }
+        if (e2.key === 'a') { e2.preventDefault(); clearSessionContext(); navigate('analytics', { projectId: state.currentProject }); showAnalytics(state.currentProject); }
         if (e2.key === 'm') { e2.preventDefault(); showMemory(); }
         if (e2.key === 'n') { e2.preventDefault(); toggleNotesPanel(); }
       };
@@ -714,7 +815,7 @@ function startTips() {
   startTips();
   await loadProjects();
 
-  // Handle initial route (URL hash or last session)
+  // Handle initial route (URL hash, last session, or home)
   const route = getRoute();
   if (route) {
     await handleRoute(route);
@@ -724,7 +825,9 @@ function startTips() {
       if (last?.projectId && last?.sessionId) {
         navigate('session', last);
         await loadSession(last.projectId, last.sessionId);
+      } else {
+        showHome();
       }
-    } catch {}
+    } catch { showHome(); }
   }
 })();

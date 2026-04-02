@@ -1,0 +1,33 @@
+{
+  "name": "claude-journal-tray",
+  "version": "1.0.0",
+  "description": "System tray for Claude Journal",
+  "author": "xunjian_yin",
+  "main": "tray.js",
+  "scripts": {
+    "start": "electron tray.js",
+    "build": "electron-builder --linux AppImage",
+    "build:mac": "electron-builder --mac",
+    "build:win": "electron-builder --win",
+    "build:linux": "electron-builder --linux"
+  },
+  "build": {
+    "appId": "com.claude-journal.tray",
+    "productName": "Claude Journal",
+    "mac": { "category": "public.app-category.developer-tools" },
+    "linux": { "target": "AppImage", "category": "Development" },
+    "files": ["tray.js", "!node_modules"],
+    "extraResources": [
+      { "from": "../server.js", "to": "server.js" },
+      { "from": "../public", "to": "public" },
+      { "from": "../bin", "to": "bin" },
+      { "from": "../package.json", "to": "app-package.json" },
+      { "from": "../node_modules", "to": "node_modules" }
+    ],
+    "npmRebuild": false
+  },
+  "devDependencies": {
+    "electron": "^33.0.0",
+    "electron-builder": "^25.0.0"
+  }
+}

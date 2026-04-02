@@ -30,6 +30,21 @@ const settings = loadSettings();
 const PROJECTS_DIR = process.env.CLAUDE_PROJECTS_DIR || settings.projectsDir;
 const PORT = process.env.PORT || settings.port;
 
+// ── Basic Auth (optional) ───────────────────────────────────────────────────
+
+const AUTH = process.env.CLAUDE_JOURNAL_AUTH; // "user:pass"
+
+function authMiddleware(req, res, next) {
+  if (!AUTH) return next();
+  const header = req.headers.authorization;
+  if (header) {
+    const [scheme, encoded] = header.split(' ');
+    if (scheme === 'Basic' && Buffer.from(encoded, 'base64').toString() === AUTH) return next();
+  }
+  res.setHeader('WWW-Authenticate', 'Basic realm="Claude Journal"');
+  res.status(401).send('Authentication required');
+}
+
 // ── Pricing (per 1M tokens) ────────────────────────────────────────────────
 
 const PRICING = {
@@ -158,6 +173,7 @@ const app = express();
 const server = http.createServer(app);
 const wss = new WebSocketServer({ server });
 
+app.use(authMiddleware);
 app.use(express.static(path.join(__dirname, 'public')));
 app.use(express.json({ limit: '2mb' }));
 
@@ -762,15 +778,41 @@ wss.on('connection', (ws) => {
 
 // ── Start ───────────────────────────────────────────────────────────────────
 
-server.listen(PORT, '0.0.0.0', () => {
-  const url = `http://localhost:${PORT}`;
-  console.log(`\n  Claude Journal`);
-  console.log(`  ${url}\n`);
-  if (settings.autoOpen) {
-    const cmd = process.platform === 'darwin' ? 'open' : 'xdg-open';
-    exec(`${cmd} ${url}`, () => {});
-  }
-});
+function startServer(port, maxRetries = 10) {
+  // Test port availability first with a plain TCP server
+  const testServer = require('net').createServer();
+  testServer.once('error', (err) => {
+    if (err.code === 'EADDRINUSE' && maxRetries > 0) {
+      console.log(`  Port ${port} in use, trying ${port + 1}...`);
+      startServer(port + 1, maxRetries - 1);
+    } else {
+      console.error(`  Failed to start: ${err.message}`);
+      process.exit(1);
+    }
+  });
+  testServer.listen(port, '0.0.0.0', () => {
+    testServer.close(() => {
+      // Port is free, now start the real server
+      actualStart(port);
+    });
+  });
+}
+
+function actualStart(port) {
+  server.listen(port, '0.0.0.0', () => {
+    const url = `http://localhost:${port}`;
+    console.log(`\n  Claude Journal`);
+    console.log(`  ${url}\n`);
+    // Export actual port for CLI/tray to use
+    process.env.CLAUDE_JOURNAL_PORT = String(port);
+    if (settings.autoOpen) {
+      const cmd = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
+      exec(`${cmd} ${url}`, () => {});
+    }
+  });
+}
+
+startServer(parseInt(PORT) || 8086);
 
 process.on('SIGINT', () => { flushStatsCache(); process.exit(0); });
 process.on('SIGTERM', () => { flushStatsCache(); process.exit(0); });
