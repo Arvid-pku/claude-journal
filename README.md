@@ -41,7 +41,7 @@ claude-journal --open
 ### From Source
 
 ```bash
-git clone https://github.com/YourUsername/claude-journal.git
+git clone https://github.com/Arvid-pku/claude-journal.git
 cd claude-journal
 npm install
 npm start
@@ -56,7 +56,7 @@ docker run -v ~/.claude/projects:/data -p 8086:8086 claude-journal
 
 ### Desktop App (Linux)
 
-Download the [AppImage](https://github.com/YourUsername/claude-journal/releases) and double-click. Sits in your system tray.
+Download the [AppImage](https://github.com/Arvid-pku/claude-journal/releases) and double-click. Sits in your system tray.
 
 ---
 
