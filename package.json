@@ -1,6 +1,6 @@
 {
   "name": "claude-journal",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "View, annotate, search, and analyze your Claude Code conversation history",
   "main": "server.js",
   "bin": {

@@ -219,6 +219,45 @@ claude-journal --stop
 
 ---
 
+## Daemon Mode
+
+Run Claude Journal in the background so it's always available — no terminal window needed.
+
+```bash
+# Start as background daemon
+claude-journal --daemon
+
+# Output:
+#   Claude Journal (daemon)
+#   PID:  12345
+#   URL:  http://localhost:8086
+#   Log:  /tmp/claude-journal.log
+#   Stop: claude-journal --stop
+```
+
+The daemon detaches from the terminal and keeps running after you close the shell. Use `--status` and `--stop` to manage it:
+
+```bash
+claude-journal --status    # Running (PID 12345) at http://localhost:8086
+claude-journal --stop      # Stopped (PID 12345)
+```
+
+If the requested port is busy, the daemon auto-increments and reports the actual port it bound to.
+
+### After a Reboot
+
+The daemon does not survive reboots. Just run `claude-journal` (or `claude-journal --daemon`) again — no reinstall needed. Your global install, settings, and all annotations are preserved.
+
+If you want Claude Journal to start automatically on login, use pm2:
+
+```bash
+npm install -g pm2
+pm2 start claude-journal -- --no-open --port 8086
+pm2 save && pm2 startup
+```
+
+---
+
 ## Remote Access
 
 If Claude Code runs on a remote server:
