@@ -1,0 +1,66 @@
+name: Build & Release
+
+on:
+  push:
+    tags: ['v*']
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: macos-latest
+            target: mac
+            artifact: "tray/dist/*.dmg"
+          - os: windows-latest
+            target: win
+            artifact: "tray/dist/*.exe"
+          - os: ubuntu-latest
+            target: linux
+            artifact: "tray/dist/*.AppImage"
+
+    runs-on: ${{ matrix.os }}
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - name: Install app dependencies
+        run: npm install --omit=dev
+
+      - name: Install tray dependencies
+        working-directory: tray
+        run: npm install
+
+      - name: Build
+        working-directory: tray
+        run: npx electron-builder --${{ matrix.target }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: claude-journal-${{ matrix.target }}
+          path: ${{ matrix.artifact }}
+
+  release:
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          merge-multiple: true
+          path: artifacts
+
+      - name: Create Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: artifacts/*
+          generate_release_notes: true
