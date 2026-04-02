@@ -1,0 +1,15 @@
+{
+  "name": "claude-history-viewer",
+  "version": "1.0.0",
+  "description": "Elegant live viewer for Claude Code conversation history",
+  "main": "server.js",
+  "scripts": {
+    "start": "node server.js",
+    "dev": "node server.js"
+  },
+  "dependencies": {
+    "chokidar": "^4.0.3",
+    "express": "^5.1.0",
+    "ws": "^8.18.2"
+  }
+}

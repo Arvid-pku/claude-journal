@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en" data-theme="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Claude History</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>C</text></svg>">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.1/marked.min.js"></script>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <div id="app">
+    <aside id="sidebar">
+      <div class="sidebar-header">
+        <div class="logo">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          <span>Claude History</span>
+        </div>
+        <div style="display:flex;gap:2px">
+          <button id="btn-settings" class="icon-btn" title="Settings">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          </button>
+          <button id="btn-theme" class="icon-btn" title="Toggle theme">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+          </button>
+        </div>
+      </div>
+      <div class="sidebar-search">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+        <input type="text" id="sidebar-search" placeholder="Search sessions..." autocomplete="off">
+      </div>
+      <nav id="project-list" class="sidebar-nav"></nav>
+    </aside>
+    <div id="resize-handle"></div>
+    <main id="main">
+      <header id="topbar">
+        <button id="btn-sidebar-toggle" class="icon-btn mobile-only" title="Toggle sidebar">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 12h18M3 6h18M3 18h18"/></svg>
+        </button>
+        <div id="session-info">
+          <h2 id="session-title">Select a session</h2>
+          <span id="session-meta"></span>
+        </div>
+        <div id="topbar-actions">
+          <div class="search-box hidden" id="search-box">
+            <input type="text" id="message-search" placeholder="Search in conversation..." autocomplete="off">
+            <span id="search-count"></span>
+            <button class="icon-btn" id="btn-search-close" title="Close">
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg>
+            </button>
+          </div>
+          <button class="icon-btn" id="btn-search" title="Search (Ctrl+F)">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+          </button>
+          <button class="icon-btn" id="btn-memory" title="Project memory">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+          </button>
+          <button class="icon-btn" id="btn-favorites" title="Favorites only">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+          </button>
+          <button class="icon-btn" id="btn-export" title="Export Markdown">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+          </button>
+          <button class="icon-btn active" id="btn-live" title="Auto-refresh: watches the session file for changes">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z"/></svg>
+            <span class="live-label">Live</span>
+          </button>
+        </div>
+      </header>
+      <div id="content-area">
+        <div id="messages">
+          <div id="empty-state">
+            <svg width="64" height="64" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1" opacity="0.3"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+            <h2>Claude History Viewer</h2>
+            <p>Select a session from the sidebar to view the conversation</p>
+            <div class="shortcuts"><kbd>Ctrl+F</kbd> Search <kbd>Ctrl+B</kbd> Sidebar <kbd>Ctrl+E</kbd> Export</div>
+          </div>
+        </div>
+        <div id="conv-rail"></div>
+      </div>
+      <div id="statusbar">
+        <span id="status-connection"><span class="dot"></span><span id="status-text">Ready</span></span>
+        <span id="status-stats"></span>
+      </div>
+    </main>
+  </div>
+
+  <!-- Note modal -->
+  <div id="note-modal" class="modal hidden">
+    <div class="modal-backdrop" data-dismiss="note-modal"></div>
+    <div class="modal-content"><h3>Add Note</h3>
+      <textarea id="note-text" rows="4" placeholder="Write your note..."></textarea>
+      <div class="modal-actions"><button class="btn btn-ghost" data-dismiss="note-modal">Cancel</button><button class="btn btn-primary" id="note-save">Save</button></div>
+    </div>
+  </div>
+
+  <!-- Move modal -->
+  <div id="move-modal" class="modal hidden">
+    <div class="modal-backdrop" data-dismiss="move-modal"></div>
+    <div class="modal-content"><h3>Move Session To</h3><div id="move-project-list" class="move-list"></div>
+      <div class="modal-actions"><button class="btn btn-ghost" data-dismiss="move-modal">Cancel</button></div>
+    </div>
+  </div>
+
+  <!-- Delete modal -->
+  <div id="delete-modal" class="modal hidden">
+    <div class="modal-backdrop" data-dismiss="delete-modal"></div>
+    <div class="modal-content"><h3>Delete Session</h3>
+      <p style="color:var(--text-secondary)">This will permanently delete the JSONL file and its subagent data.</p>
+      <p id="delete-session-name" style="font-weight:600;margin:8px 0"></p>
+      <div class="modal-actions"><button class="btn btn-ghost" data-dismiss="delete-modal">Cancel</button><button class="btn btn-danger" id="delete-confirm">Delete</button></div>
+    </div>
+  </div>
+
+  <!-- Memory modal -->
+  <div id="memory-modal" class="modal hidden">
+    <div class="modal-backdrop" data-dismiss="memory-modal"></div>
+    <div class="modal-content modal-wide"><h3>Project Memory</h3>
+      <div id="memory-content" class="memory-content"></div>
+      <div class="modal-actions"><button class="btn btn-ghost" data-dismiss="memory-modal">Close</button></div>
+    </div>
+  </div>
+
+  <!-- Settings modal -->
+  <div id="settings-modal" class="modal hidden">
+    <div class="modal-backdrop" data-dismiss="settings-modal"></div>
+    <div class="modal-content modal-wide"><h3>Settings</h3>
+      <div class="settings-columns">
+        <div class="settings-col">
+          <div class="settings-section-title">Display</div>
+          <div class="settings-group">
+            <label>Font Size</label>
+            <select id="setting-font-size" class="modal-select">
+              <option value="small">Small</option>
+              <option value="default">Default</option>
+              <option value="large">Large</option>
+            </select>
+          </div>
+          <div class="settings-group"><label><input type="checkbox" id="setting-compact"> Compact mode</label></div>
+          <div class="settings-group"><label><input type="checkbox" id="setting-timestamps"> Show timestamps</label></div>
+          <div class="settings-group">
+            <label>Message max width (px)</label>
+            <input type="number" id="setting-msg-width" class="modal-input modal-input-sm" min="400" max="2000" step="50">
+          </div>
+
+          <div class="settings-section-title" style="margin-top:16px">Sessions</div>
+          <div class="settings-group">
+            <label>Sort order</label>
+            <select id="setting-session-sort" class="modal-select">
+              <option value="newest">Newest first</option>
+              <option value="oldest">Oldest first</option>
+              <option value="messages">Most messages</option>
+              <option value="cost">Highest cost</option>
+              <option value="alpha">Alphabetical</option>
+            </select>
+          </div>
+          <div class="settings-group"><label><input type="checkbox" id="setting-auto-scroll"> Auto-scroll on live update</label></div>
+        </div>
+
+        <div class="settings-col">
+          <div class="settings-section-title">Messages</div>
+          <div class="settings-group"><label><input type="checkbox" id="setting-tokens"> Show token usage</label></div>
+          <div class="settings-group"><label><input type="checkbox" id="setting-cost"> Show cost estimates</label></div>
+          <div class="settings-group"><label><input type="checkbox" id="setting-thinking"> Show thinking blocks</label></div>
+          <div class="settings-group"><label><input type="checkbox" id="setting-hide-tags"> Hide system/meta tags</label></div>
+
+          <div class="settings-section-title" style="margin-top:16px">Tool Calls</div>
+          <div class="settings-group"><label><input type="checkbox" id="setting-tool-expanded"> Expand by default</label></div>
+          <div class="settings-group">
+            <label>Max output preview (chars)</label>
+            <input type="number" id="setting-tool-max-output" class="modal-input modal-input-sm" min="500" max="50000" step="500">
+          </div>
+
+          <div class="settings-section-title" style="margin-top:16px">Server</div>
+          <div class="settings-group">
+            <label>Projects directory</label>
+            <input type="text" id="setting-projects-dir" class="modal-input" placeholder="/path/to/.claude/projects">
+            <small style="color:var(--text-muted)">Requires restart</small>
+          </div>
+          <div class="settings-group"><label><input type="checkbox" id="setting-auto-open"> Auto-open browser on start</label></div>
+        </div>
+      </div>
+      <div class="modal-actions"><button class="btn btn-ghost" data-dismiss="settings-modal">Cancel</button><button class="btn btn-primary" id="settings-save">Save</button></div>
+    </div>
+  </div>
+
+  <!-- Context menu -->
+  <div id="context-menu" class="context-menu hidden">
+    <button data-ctx="rename"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/></svg>Rename</button>
+    <button data-ctx="duplicate"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg>Duplicate</button>
+    <button data-ctx="move"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 12h14"/><path d="m12 5 7 7-7 7"/></svg>Move to...</button>
+    <div class="ctx-divider"></div>
+    <button data-ctx="delete" class="danger"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg>Delete</button>
+  </div>
+
+  <!-- Highlight picker -->
+  <div id="highlight-picker" class="popup hidden">
+    <button class="color-dot" data-color="#fbbf24" style="--c:#fbbf24"></button>
+    <button class="color-dot" data-color="#34d399" style="--c:#34d399"></button>
+    <button class="color-dot" data-color="#60a5fa" style="--c:#60a5fa"></button>
+    <button class="color-dot" data-color="#f472b6" style="--c:#f472b6"></button>
+    <button class="color-dot" data-color="#a78bfa" style="--c:#a78bfa"></button>
+    <button class="color-dot remove" data-color=""><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6 6 18M6 6l12 12"/></svg></button>
+  </div>
+
+  <script type="module" src="/modules/main.js"></script>
+</body>
+</html>
