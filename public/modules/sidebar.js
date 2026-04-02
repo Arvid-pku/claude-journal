@@ -42,6 +42,7 @@ export async function loadSessions(projectId) {
 export function renderSessionList(projectId, sessions, container) {
   container.innerHTML = '';
   const query = document.getElementById('sidebar-search').value.toLowerCase();
+  const filterAnnotated = document.getElementById('sidebar-filter-annotated')?.classList.contains('toggled') || false;
 
   // Sort based on settings
   const sorted = [...sessions];
@@ -56,6 +57,7 @@ export function renderSessionList(projectId, sessions, container) {
   for (const s of sorted) {
     const title = s.customName || s.summary || s.firstPrompt || s.sessionId.slice(0, 8);
     if (query && !title.toLowerCase().includes(query) && !s.sessionId.includes(query)) continue;
+    if (filterAnnotated && !s.hasAnnotations) continue;
 
     const item = document.createElement('div');
     item.className = 'session-item';
@@ -67,9 +69,12 @@ export function renderSessionList(projectId, sessions, container) {
     const totalTok = (s.inputTok || 0) + (s.outputTok || 0);
     const cost = formatCost(s.cost);
 
+    const badges = s.hasAnnotations ? '<span class="session-badge" title="Has annotations">&#9679;</span>' : '';
+
     item.innerHTML = `
       <div class="session-top">
         <span class="session-title" title="${escapeHtml(title)}">${escapeHtml(truncateText(title, 55))}</span>
+        ${badges}
         <button class="session-menu-btn" title="Actions">&#8943;</button>
       </div>
       <span class="session-meta-line"><span>${dateRange}</span></span>

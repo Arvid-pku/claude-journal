@@ -1,9 +1,10 @@
-import { state, DEFAULTS, api, apiPost, apiPut, IC, setAfterRender, setOnSessionSelect,
+import { state, DEFAULTS, api, apiPost, apiPut, apiDelete, IC, setAfterRender, setOnSessionSelect,
   showModal, hideModal, renderMarkdown, escapeHtml, applySettings } from './state.js';
 import { renderSidebar, loadSessions, renderSessionList, updateSidebarActive,
   hideContextMenu, renameSession, duplicateSession, moveSession, deleteSession, setupResize } from './sidebar.js';
 import { processMessages, renderMessages, updateSessionInfo, updateStats, startEditing } from './messages.js';
 import { renderRail, updateRailActive } from './rail.js';
+import { toggleNotesPanel, renderNotesPanel } from './notes.js';
 import { toast, loading } from './toast.js';
 import { getRoute, navigate, onRouteChange } from './router.js';
 import { openSearch, closeSearch, setupSearch, setSearchNavigate } from './search.js';
@@ -11,7 +12,7 @@ import { showAnalytics } from './analytics.js';
 
 // ── Wire callbacks ──────────────────────────────────────────────────────
 
-setAfterRender(() => renderRail());
+setAfterRender(() => { renderRail(); renderNotesPanel(); });
 setOnSessionSelect((pid, sid) => { navigate('session', { projectId: pid, sessionId: sid }); loadSession(pid, sid); });
 setSearchNavigate((pid, sid, uuid) => {
   loadSession(pid, sid).then(() => {
@@ -287,6 +288,16 @@ function setupEvents() {
         btn.innerHTML = IC.check; setTimeout(() => btn.innerHTML = IC.copy, 1500);
         toast('Copied', 'success', 1500); break;
       }
+      case 'delete': {
+        if (!confirm('Delete this message from the JSONL file?')) break;
+        try {
+          await apiDelete(`/api/messages/${encodeURIComponent(state.currentProject)}/${encodeURIComponent(state.currentSession)}/${encodeURIComponent(uuid)}`);
+          state.displayMessages = state.displayMessages.filter(m => m.uuid !== uuid);
+          renderMessages();
+          toast('Message deleted', 'success');
+        } catch (err) { toast(`Delete failed: ${err.message}`, 'error'); }
+        break;
+      }
     }
   });
 
@@ -339,8 +350,13 @@ function setupEvents() {
   document.getElementById('btn-favorites').addEventListener('click', () => { state.favoritesOnly = !state.favoritesOnly; document.getElementById('btn-favorites').classList.toggle('toggled', state.favoritesOnly); renderMessages(); });
   document.getElementById('btn-live').addEventListener('click', () => { state.liveEnabled = !state.liveEnabled; document.getElementById('btn-live').classList.toggle('active', state.liveEnabled); watchSession(); });
   document.getElementById('btn-export').addEventListener('click', exportSession);
+  document.getElementById('btn-notes').addEventListener('click', toggleNotesPanel);
   document.getElementById('btn-memory').addEventListener('click', showMemory);
-  document.getElementById('btn-analytics').addEventListener('click', () => { navigate('analytics', {}); showAnalytics(null); });
+  document.getElementById('btn-analytics').addEventListener('click', () => {
+    const pid = state.currentProject || null;
+    navigate('analytics', { projectId: pid });
+    showAnalytics(pid);
+  });
   document.getElementById('btn-settings').addEventListener('click', showSettings);
   document.getElementById('settings-save').addEventListener('click', saveSettings);
   document.getElementById('btn-theme').addEventListener('click', () => {
@@ -348,6 +364,15 @@ function setupEvents() {
     localStorage.setItem('theme', html.dataset.theme);
   });
   document.getElementById('btn-sidebar-toggle').addEventListener('click', () => document.getElementById('sidebar').classList.toggle('collapsed'));
+
+  // Sidebar filter
+  document.getElementById('sidebar-filter-annotated').addEventListener('click', (e) => {
+    e.currentTarget.classList.toggle('toggled');
+    for (const [pid, sessions] of Object.entries(state.sessions)) {
+      const c = document.querySelector(`.project-sessions[data-project="${pid}"]`);
+      if (c) renderSessionList(pid, sessions, c);
+    }
+  });
 
   // Sidebar search
   document.getElementById('sidebar-search').addEventListener('input', () => {
@@ -392,8 +417,9 @@ function setupEvents() {
       const handler = (e2) => {
         document.removeEventListener('keydown', handler);
         if (e2.key === 's') { e2.preventDefault(); showSettings(); }
-        if (e2.key === 'a') { e2.preventDefault(); navigate('analytics', {}); showAnalytics(null); }
+        if (e2.key === 'a') { e2.preventDefault(); navigate('analytics', { projectId: state.currentProject }); showAnalytics(state.currentProject); }
         if (e2.key === 'm') { e2.preventDefault(); showMemory(); }
+        if (e2.key === 'n') { e2.preventDefault(); toggleNotesPanel(); }
       };
       document.addEventListener('keydown', handler, { once: true });
       setTimeout(() => document.removeEventListener('keydown', handler), 1000);
@@ -411,6 +437,45 @@ function setupEvents() {
 function isScrolledToBottom() { const el = document.getElementById('messages'); return el.scrollHeight - el.scrollTop - el.clientHeight < 100; }
 function scrollToBottom() { document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight; }
 
+// ── Random Tips ─────────────────────────────────────────────────────────
+
+const TIPS = [
+  'Press / to search across all sessions',
+  'j/k to move between messages, n/p to jump between turns',
+  'Ctrl+Shift+F for global search',
+  'Click the star on any message to favorite it',
+  'Right-click a session to rename, duplicate, or delete',
+  'Press g then a to open the analytics dashboard',
+  'Press g then m to view project memory',
+  'Ctrl+B toggles the sidebar',
+  'Ctrl+E exports the current session as Markdown',
+  'Click a dot on the right rail to jump to that turn',
+  'Highlight messages with colors to organize your notes',
+  'The lightning icon enables live auto-refresh',
+  'Edit any message — changes sync back to the JSONL file',
+  'Click "View subagent conversation" inside Agent tool calls',
+  'Double-click a session name in the sidebar to rename it',
+  'Use the gear icon to customize font size, compact mode, and more',
+  'Sessions are sorted by date — change it in Settings',
+  'Install as a PWA for a native app experience',
+  'Cost estimates are shown per message and per session',
+  'Press Escape to close any modal or popup',
+];
+
+let tipIdx = Math.floor(Math.random() * TIPS.length);
+
+function showTip() {
+  const el = document.getElementById('status-tip');
+  if (!el) return;
+  el.textContent = TIPS[tipIdx];
+  tipIdx = (tipIdx + 1) % TIPS.length;
+}
+
+function startTips() {
+  showTip();
+  setInterval(showTip, 30_000); // rotate every 30s
+}
+
 // ── Init ────────────────────────────────────────────────────────────────
 
 (async () => {
@@ -425,6 +490,7 @@ function scrollToBottom() { document.getElementById('messages').scrollTop = docu
 
   setupEvents();
   connectWS();
+  startTips();
   await loadProjects();
 
   // Handle initial route (URL hash or last session)

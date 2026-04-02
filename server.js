@@ -223,6 +223,7 @@ app.get('/api/sessions/:project', (req, res) => {
       if (names[nameKey]) s.customName = names[nameKey];
       const stats = getSessionStats(path.join(projectDir, `${s.sessionId}.jsonl`));
       if (stats) Object.assign(s, stats);
+      s.hasAnnotations = fs.existsSync(path.join(ANNOTATIONS_DIR, `${req.params.project}__${s.sessionId}.json`));
     }
 
     sessions.sort((a, b) => new Date(b.modified || b.lastTs || 0) - new Date(a.modified || a.lastTs || 0));
@@ -268,6 +269,22 @@ app.put('/api/messages/:project/:session/:uuid', (req, res) => {
     }
     if (!found) return res.status(404).json({ error: 'UUID not found' });
     atomicWrite(fp, lines.join('\n'));
+    res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// Delete a message from JSONL
+app.delete('/api/messages/:project/:session/:uuid', (req, res) => {
+  try {
+    const fp = path.join(PROJECTS_DIR, req.params.project, `${req.params.session}.jsonl`);
+    if (!fs.existsSync(fp)) return res.status(404).json({ error: 'Not found' });
+    const lines = fs.readFileSync(fp, 'utf8').split('\n');
+    const filtered = lines.filter(l => {
+      if (!l.trim()) return false;
+      try { return JSON.parse(l).uuid !== req.params.uuid; } catch { return true; }
+    });
+    if (filtered.length === lines.filter(l => l.trim()).length) return res.status(404).json({ error: 'UUID not found' });
+    atomicWrite(fp, filtered.join('\n') + '\n');
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });

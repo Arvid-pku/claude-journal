@@ -120,7 +120,8 @@ function createMessageEl(msg) {
     <button title="Highlight" data-action="highlight" data-uuid="${msg.uuid}">${IC.highlight}</button>
     <button title="Note" data-action="note" data-uuid="${msg.uuid}">${IC.note}</button>
     <button title="Edit" data-action="edit" data-uuid="${msg.uuid}">${IC.edit}</button>
-    <button title="Copy" data-action="copy" data-uuid="${msg.uuid}">${IC.copy}</button>`;
+    <button title="Copy" data-action="copy" data-uuid="${msg.uuid}">${IC.copy}</button>
+    <button class="act-del" title="Delete message" data-action="delete" data-uuid="${msg.uuid}">${IC.trash}</button>`;
 
   inner.appendChild(header); inner.appendChild(body); inner.appendChild(actions);
   div.appendChild(inner);
