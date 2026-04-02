@@ -764,7 +764,7 @@ wss.on('connection', (ws) => {
 
 server.listen(PORT, '0.0.0.0', () => {
   const url = `http://localhost:${PORT}`;
-  console.log(`\n  Claude History Viewer`);
+  console.log(`\n  Claude Journal`);
   console.log(`  ${url}\n`);
   if (settings.autoOpen) {
     const cmd = process.platform === 'darwin' ? 'open' : 'xdg-open';

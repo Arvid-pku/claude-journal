@@ -1,6 +1,6 @@
 const { test, expect } = require('@playwright/test');
 
-test.describe('Claude History Viewer', () => {
+test.describe('Claude Journal', () => {
 
   test('page loads with sidebar and empty state', async ({ page }) => {
     await page.goto('/');

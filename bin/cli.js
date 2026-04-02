@@ -8,10 +8,10 @@ const help = args.includes('--help') || args.includes('-h');
 
 if (help) {
   console.log(`
-  Claude History Viewer
+  Claude Journal
 
   Usage:
-    claude-history [options]
+    claude-journal [options]
 
   Options:
     -p, --port <port>     Port to listen on (default: 8086)
@@ -20,10 +20,10 @@ if (help) {
     -h, --help            Show this help
 
   Examples:
-    claude-history
-    claude-history --port 3000
-    claude-history --dir ~/.claude/projects --open
-    npx claude-history-viewer
+    claude-journal
+    claude-journal --port 3000
+    claude-journal --dir ~/.claude/projects --open
+    npx claude-journal
   `);
   process.exit(0);
 }

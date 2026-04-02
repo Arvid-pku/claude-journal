@@ -1,11 +1,10 @@
 {
-  "name": "claude-history-viewer",
+  "name": "claude-journal",
   "version": "1.0.0",
-  "description": "Elegant live viewer for Claude Code conversation history with annotations, analytics, and search",
+  "description": "View, annotate, search, and analyze your Claude Code conversation history",
   "main": "server.js",
   "bin": {
-    "claude-history": "bin/cli.js",
-    "claude-history-viewer": "bin/cli.js"
+    "claude-journal": "bin/cli.js"
   },
   "scripts": {
     "start": "node server.js",
@@ -13,8 +12,8 @@
     "test": "playwright test"
   },
   "keywords": [
-    "claude", "claude-code", "conversation", "history", "viewer",
-    "chat", "analytics", "annotations", "search"
+    "claude", "claude-code", "conversation", "history", "journal",
+    "annotations", "analytics", "search", "highlights", "notes"
   ],
   "license": "MIT",
   "repository": {

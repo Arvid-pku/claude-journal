@@ -1,7 +1,7 @@
 {
-  "name": "Claude History Viewer",
-  "short_name": "Claude History",
-  "description": "Live viewer for Claude Code conversation history",
+  "name": "Claude Journal",
+  "short_name": "Claude Journal",
+  "description": "View, annotate, search, and analyze Claude Code conversations",
   "start_url": "/",
   "display": "standalone",
   "background_color": "#0b0d14",
