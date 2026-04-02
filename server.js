@@ -272,6 +272,105 @@ app.put('/api/messages/:project/:session/:uuid', (req, res) => {
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
+// ── Global Search ───────────────────────────────────────────────────────────
+
+let searchIndex = null, searchIndexTime = 0;
+
+function buildSearchIndex() {
+  const now = Date.now();
+  if (searchIndex && now - searchIndexTime < 60_000) return searchIndex;
+  const entries = [];
+  const names = loadNames();
+  try {
+    const dirs = fs.readdirSync(PROJECTS_DIR, { withFileTypes: true }).filter(d => d.isDirectory());
+    for (const pd of dirs) {
+      const projectDir = path.join(PROJECTS_DIR, pd.name);
+      for (const f of fs.readdirSync(projectDir).filter(f => f.endsWith('.jsonl'))) {
+        const sessionId = f.replace('.jsonl', '');
+        const sessionName = names[`${pd.name}__${sessionId}`] || '';
+        try {
+          for (const line of fs.readFileSync(path.join(projectDir, f), 'utf8').split('\n')) {
+            if (!line) continue;
+            const m = JSON.parse(line);
+            let text = null;
+            if (m.type === 'user' && m.message?.role === 'user' && typeof m.message.content === 'string')
+              text = m.message.content;
+            else if (m.type === 'assistant' && Array.isArray(m.message?.content))
+              text = m.message.content.filter(b => b.type === 'text').map(b => b.text).join('\n');
+            if (text && text.length > 3)
+              entries.push({ projectId: pd.name, sessionId, sessionName, uuid: m.uuid, role: m.type, text, ts: m.timestamp });
+          }
+        } catch {}
+      }
+    }
+  } catch {}
+  searchIndex = entries;
+  searchIndexTime = now;
+  return entries;
+}
+
+app.get('/api/search', (req, res) => {
+  const q = (req.query.q || '').toLowerCase().trim();
+  if (!q || q.length < 2) return res.json([]);
+  const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+  const index = buildSearchIndex();
+  const results = [];
+  for (const e of index) {
+    const idx = e.text.toLowerCase().indexOf(q);
+    if (idx === -1) continue;
+    const start = Math.max(0, idx - 80), end = Math.min(e.text.length, idx + q.length + 80);
+    results.push({ projectId: e.projectId, sessionId: e.sessionId, sessionName: e.sessionName,
+      uuid: e.uuid, role: e.role, ts: e.ts,
+      snippet: (start > 0 ? '...' : '') + e.text.slice(start, end) + (end < e.text.length ? '...' : '') });
+    if (results.length >= limit) break;
+  }
+  res.json(results);
+});
+
+// ── Analytics ───────────────────────────────────────────────────────────────
+
+app.get('/api/analytics', (req, res) => {
+  try {
+    const filterProject = req.query.project;
+    const dirs = filterProject
+      ? [{ name: filterProject }]
+      : fs.readdirSync(PROJECTS_DIR, { withFileTypes: true }).filter(d => d.isDirectory());
+
+    const byDay = {}, byModel = {};
+    let totalCost = 0, totalInput = 0, totalOutput = 0, totalMsgs = 0, sessionCount = 0;
+
+    for (const pd of dirs) {
+      const projectDir = path.join(PROJECTS_DIR, typeof pd === 'string' ? pd : pd.name);
+      if (!fs.existsSync(projectDir)) continue;
+      const jsonls = fs.readdirSync(projectDir).filter(f => f.endsWith('.jsonl'));
+      sessionCount += jsonls.length;
+      for (const f of jsonls) {
+        try {
+          for (const line of fs.readFileSync(path.join(projectDir, f), 'utf8').split('\n')) {
+            if (!line) continue;
+            const m = JSON.parse(line);
+            if (m.type !== 'assistant' || !m.message?.usage) continue;
+            const u = m.message.usage, model = m.message.model || 'unknown';
+            const cost = messageCost(model, u);
+            const day = (m.timestamp || '').slice(0, 10) || 'unknown';
+            const inp = u.input_tokens || 0, out = u.output_tokens || 0;
+
+            if (!byDay[day]) byDay[day] = { cost: 0, input: 0, output: 0, msgs: 0 };
+            byDay[day].cost += cost; byDay[day].input += inp; byDay[day].output += out; byDay[day].msgs++;
+
+            if (!byModel[model]) byModel[model] = { cost: 0, tokens: 0, msgs: 0 };
+            byModel[model].cost += cost; byModel[model].tokens += inp + out; byModel[model].msgs++;
+
+            totalCost += cost; totalInput += inp; totalOutput += out; totalMsgs++;
+          }
+        } catch {}
+      }
+    }
+
+    res.json({ totalCost: Math.round(totalCost * 100) / 100, totalInput, totalOutput, totalMsgs, sessionCount, byDay, byModel });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
 // ── Subagents ───────────────────────────────────────────────────────────────
 
 app.get('/api/subagents/:project/:session', (req, res) => {

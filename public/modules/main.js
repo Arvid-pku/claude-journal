@@ -4,11 +4,23 @@ import { renderSidebar, loadSessions, renderSessionList, updateSidebarActive,
   hideContextMenu, renameSession, duplicateSession, moveSession, deleteSession, setupResize } from './sidebar.js';
 import { processMessages, renderMessages, updateSessionInfo, updateStats, startEditing } from './messages.js';
 import { renderRail, updateRailActive } from './rail.js';
+import { toast, loading } from './toast.js';
+import { getRoute, navigate, onRouteChange } from './router.js';
+import { openSearch, closeSearch, setupSearch, setSearchNavigate } from './search.js';
+import { showAnalytics } from './analytics.js';
 
 // ── Wire callbacks ──────────────────────────────────────────────────────
 
-setAfterRender(() => { renderRail(); });
-setOnSessionSelect((projectId, sessionId) => loadSession(projectId, sessionId));
+setAfterRender(() => renderRail());
+setOnSessionSelect((pid, sid) => { navigate('session', { projectId: pid, sessionId: sid }); loadSession(pid, sid); });
+setSearchNavigate((pid, sid, uuid) => {
+  loadSession(pid, sid).then(() => {
+    if (uuid) setTimeout(() => {
+      const el = document.querySelector(`.message[data-uuid="${uuid}"]`);
+      if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.querySelector('.message-inner')?.classList.add('flash'); }
+    }, 300);
+  });
+});
 
 // ── Data loading ────────────────────────────────────────────────────────
 
@@ -20,26 +32,64 @@ async function loadProjects() {
 async function loadSession(projectId, sessionId) {
   state.currentProject = projectId;
   state.currentSession = sessionId;
-  localStorage.setItem('lastSession', JSON.stringify({ projectId, sessionId }));
   state.favoritesOnly = false;
   state.subagentIndex = {};
   state.subagentMsgs = {};
   document.getElementById('btn-favorites').classList.remove('toggled');
+  localStorage.setItem('lastSession', JSON.stringify({ projectId, sessionId }));
 
-  const [messages, annotations] = await Promise.all([
-    api(`/api/messages/${encodeURIComponent(projectId)}/${encodeURIComponent(sessionId)}`),
-    api(`/api/annotations/${encodeURIComponent(projectId)}/${encodeURIComponent(sessionId)}`),
-  ]);
+  const done = loading('Loading session...');
+  try {
+    // Ensure sessions are loaded for sidebar
+    if (!state.sessions[projectId]) {
+      await loadSessions(projectId);
+      const container = document.querySelector(`.project-sessions[data-project="${projectId}"]`);
+      const header = document.querySelector(`.project-header[data-project="${projectId}"]`);
+      if (header?.classList.contains('collapsed')) header.classList.remove('collapsed');
+      if (container) renderSessionList(projectId, state.sessions[projectId], container);
+    }
 
-  state.rawMessages = messages;
-  state.annotations = annotations;
-  state.displayMessages = processMessages(messages);
+    const [messages, annotations] = await Promise.all([
+      api(`/api/messages/${encodeURIComponent(projectId)}/${encodeURIComponent(sessionId)}`),
+      api(`/api/annotations/${encodeURIComponent(projectId)}/${encodeURIComponent(sessionId)}`),
+    ]);
 
-  renderMessages();
-  updateSessionInfo();
-  updateSidebarActive();
-  watchSession();
+    state.rawMessages = messages;
+    state.annotations = annotations;
+    state.displayMessages = processMessages(messages);
+
+    renderMessages();
+    updateSessionInfo();
+    updateSidebarActive();
+    watchSession();
+  } catch (err) {
+    toast(`Failed to load session: ${err.message}`, 'error');
+  } finally { done(); }
 }
+
+// ── Routing ─────────────────────────────────────────────────────────────
+
+async function handleRoute(route) {
+  if (!route) return;
+  if (route.page === 'session') {
+    await loadSession(route.projectId, route.sessionId);
+  } else if (route.page === 'analytics') {
+    await showAnalytics(route.projectId);
+    // Wire scope selector
+    setTimeout(() => {
+      const sel = document.getElementById('analytics-scope');
+      if (sel) sel.addEventListener('change', () => {
+        const pid = sel.value || null;
+        navigate('analytics', { projectId: pid });
+        showAnalytics(pid);
+      });
+    }, 100);
+  } else if (route.page === 'search') {
+    openSearch(route.query);
+  }
+}
+
+onRouteChange(handleRoute);
 
 // ── WebSocket ───────────────────────────────────────────────────────────
 
@@ -79,63 +129,57 @@ function setStatus(cls, text) {
 // ── Annotations ─────────────────────────────────────────────────────────
 
 async function setAnnotation(uuid, key, value) {
-  state.annotations = await apiPost(
-    `/api/annotations/${encodeURIComponent(state.currentProject)}/${encodeURIComponent(state.currentSession)}`,
-    { uuid, key, value }
-  );
-  renderMessages();
+  try {
+    state.annotations = await apiPost(
+      `/api/annotations/${encodeURIComponent(state.currentProject)}/${encodeURIComponent(state.currentSession)}`,
+      { uuid, key, value }
+    );
+    renderMessages();
+  } catch (err) { toast(`Failed: ${err.message}`, 'error'); }
 }
 
-// ── Memory Panel ────────────────────────────────────────────────────────
+// ── Memory ──────────────────────────────────────────────────────────────
 
 async function showMemory() {
-  if (!state.currentProject) return;
+  if (!state.currentProject) { toast('Select a session first', 'error'); return; }
   const key = state.currentProject;
   if (!state.memoryCache[key]) {
     try { state.memoryCache[key] = await api(`/api/memory/${encodeURIComponent(key)}`); } catch { state.memoryCache[key] = []; }
   }
   const files = state.memoryCache[key];
-  const container = document.getElementById('memory-content');
-  if (!files.length) { container.innerHTML = '<p style="color:var(--text-muted)">No memory files for this project</p>'; }
-  else {
-    container.innerHTML = files.map(f => `
-      <div class="memory-file">
-        <div class="memory-filename">${escapeHtml(f.filename)}</div>
-        <div class="memory-body">${renderMarkdown(f.content)}</div>
-      </div>
-    `).join('');
-  }
+  const c = document.getElementById('memory-content');
+  c.innerHTML = !files.length ? '<p style="color:var(--text-muted)">No memory files</p>'
+    : files.map(f => `<div class="memory-file"><div class="memory-filename">${escapeHtml(f.filename)}</div><div class="memory-body">${renderMarkdown(f.content)}</div></div>`).join('');
   showModal('memory-modal');
 }
 
 // ── Settings ────────────────────────────────────────────────────────────
 
 const SETTING_FIELDS = [
-  { id: 'setting-projects-dir',       key: 'projectsDir',         type: 'text' },
-  { id: 'setting-auto-open',          key: 'autoOpen',            type: 'checkbox' },
-  { id: 'setting-font-size',          key: 'fontSize',            type: 'select' },
-  { id: 'setting-compact',            key: 'compactMode',         type: 'checkbox' },
-  { id: 'setting-msg-width',          key: 'messageWidth',        type: 'number' },
-  { id: 'setting-tokens',             key: 'showTokenUsage',      type: 'checkbox' },
-  { id: 'setting-cost',               key: 'showCost',            type: 'checkbox' },
-  { id: 'setting-thinking',           key: 'showThinking',        type: 'checkbox' },
-  { id: 'setting-timestamps',         key: 'showTimestamps',      type: 'checkbox' },
-  { id: 'setting-hide-tags',          key: 'hideSystemTags',      type: 'checkbox' },
-  { id: 'setting-tool-expanded',      key: 'defaultToolExpanded', type: 'checkbox' },
-  { id: 'setting-tool-max-output',    key: 'maxToolOutput',       type: 'number' },
-  { id: 'setting-session-sort',       key: 'sessionSort',         type: 'select' },
-  { id: 'setting-auto-scroll',        key: 'autoScrollLive',      type: 'checkbox' },
+  { id: 'setting-projects-dir', key: 'projectsDir', type: 'text' },
+  { id: 'setting-auto-open', key: 'autoOpen', type: 'checkbox' },
+  { id: 'setting-font-size', key: 'fontSize', type: 'select' },
+  { id: 'setting-compact', key: 'compactMode', type: 'checkbox' },
+  { id: 'setting-msg-width', key: 'messageWidth', type: 'number' },
+  { id: 'setting-tokens', key: 'showTokenUsage', type: 'checkbox' },
+  { id: 'setting-cost', key: 'showCost', type: 'checkbox' },
+  { id: 'setting-thinking', key: 'showThinking', type: 'checkbox' },
+  { id: 'setting-timestamps', key: 'showTimestamps', type: 'checkbox' },
+  { id: 'setting-hide-tags', key: 'hideSystemTags', type: 'checkbox' },
+  { id: 'setting-tool-expanded', key: 'defaultToolExpanded', type: 'checkbox' },
+  { id: 'setting-tool-max-output', key: 'maxToolOutput', type: 'number' },
+  { id: 'setting-session-sort', key: 'sessionSort', type: 'select' },
+  { id: 'setting-auto-scroll', key: 'autoScrollLive', type: 'checkbox' },
 ];
 
 async function showSettings() {
-  const s = await api('/api/settings');
-  const merged = { ...DEFAULTS, ...s };
+  const s = { ...DEFAULTS, ...(await api('/api/settings')) };
   for (const f of SETTING_FIELDS) {
     const el = document.getElementById(f.id);
     if (!el) continue;
-    if (f.type === 'checkbox') el.checked = !!merged[f.key];
-    else if (f.type === 'number') el.value = merged[f.key] ?? '';
-    else el.value = merged[f.key] || '';
+    if (f.type === 'checkbox') el.checked = !!s[f.key];
+    else if (f.type === 'number') el.value = s[f.key] ?? '';
+    else el.value = s[f.key] || '';
   }
   showModal('settings-modal');
 }
@@ -149,50 +193,78 @@ async function saveSettings() {
     else if (f.type === 'number') payload[f.key] = parseInt(el.value) || DEFAULTS[f.key];
     else payload[f.key] = el.value.trim() || DEFAULTS[f.key];
   }
-  const saved = await apiPut('/api/settings', payload);
-  state.settings = { ...DEFAULTS, ...saved };
-  applySettings();
-  hideModal('settings-modal');
-  // Re-render to apply display settings
-  if (state.displayMessages.length) renderMessages();
-  // Re-sort sidebar sessions
-  for (const [pid, sessions] of Object.entries(state.sessions)) {
-    const c = document.querySelector(`.project-sessions[data-project="${pid}"]`);
-    if (c) renderSessionList(pid, sessions, c);
-  }
+  try {
+    const saved = await apiPut('/api/settings', payload);
+    state.settings = { ...DEFAULTS, ...saved };
+    applySettings();
+    hideModal('settings-modal');
+    if (state.displayMessages.length) renderMessages();
+    for (const [pid, sessions] of Object.entries(state.sessions)) {
+      const c = document.querySelector(`.project-sessions[data-project="${pid}"]`);
+      if (c) renderSessionList(pid, sessions, c);
+    }
+    toast('Settings saved', 'success');
+  } catch (err) { toast(`Failed: ${err.message}`, 'error'); }
 }
 
 // ── Export ───────────────────────────────────────────────────────────────
 
 function exportSession() {
   if (!state.displayMessages.length) return;
-  let md = `# Claude Conversation\n\n`;
+  let md = '# Claude Conversation\n\n';
   const session = (state.sessions[state.currentProject] || []).find(s => s.sessionId === state.currentSession);
   if (session) md += `**Session:** ${session.customName || session.summary || state.currentSession}\n\n---\n\n`;
   for (const msg of state.displayMessages) {
     const time = formatTime(msg.timestamp);
     const anno = state.annotations[msg.uuid] || {};
-    const star = anno.favorite ? ' \u2B50' : '';
-    if (msg.role === 'user') md += `## You (${time})${star}\n\n${msg.content}\n\n`;
+    if (msg.role === 'user') md += `## You (${time})${anno.favorite ? ' \u2B50' : ''}\n\n${msg.content}\n\n`;
     else {
-      md += `## Claude (${time})${star}\n\n`;
+      md += `## Claude (${time})${anno.favorite ? ' \u2B50' : ''}\n\n`;
       for (const p of msg.parts) { if (p.type === 'text') md += `${p.content}\n\n`; else if (p.type === 'tool_use') md += `> **Tool: ${p.name}**\n\n`; }
       if (anno.note) md += `> **Note:** ${anno.note}\n\n`;
     }
     md += '---\n\n';
   }
-  const blob = new Blob([md], { type: 'text/markdown' });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement('a'); a.href = url; a.download = `claude-${state.currentSession?.slice(0, 8) || 'export'}.md`; a.click();
-  URL.revokeObjectURL(url);
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(new Blob([md], { type: 'text/markdown' }));
+  a.download = `claude-${state.currentSession?.slice(0, 8) || 'export'}.md`;
+  a.click();
+  toast('Exported', 'success');
 }
 
 function formatTime(ts) { return ts ? new Date(ts).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) : ''; }
 
+// ── Keyboard Navigation ─────────────────────────────────────────────────
+
+let kbFocusIdx = -1;
+
+function kbNav(dir) {
+  const msgs = document.querySelectorAll('#messages .message');
+  if (!msgs.length) return;
+  msgs.forEach(m => m.classList.remove('keyboard-focus'));
+  kbFocusIdx = Math.max(0, Math.min(msgs.length - 1, kbFocusIdx + dir));
+  msgs[kbFocusIdx].classList.add('keyboard-focus');
+  msgs[kbFocusIdx].scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+function kbTurn(dir) {
+  const msgs = [...document.querySelectorAll('#messages .message')];
+  if (!msgs.length) return;
+  const userIdxs = msgs.map((m, i) => m.classList.contains('user-msg') ? i : -1).filter(i => i >= 0);
+  if (!userIdxs.length) return;
+  let target;
+  if (dir > 0) target = userIdxs.find(i => i > kbFocusIdx) ?? userIdxs[userIdxs.length - 1];
+  else target = [...userIdxs].reverse().find(i => i < kbFocusIdx) ?? userIdxs[0];
+  msgs.forEach(m => m.classList.remove('keyboard-focus'));
+  kbFocusIdx = target;
+  msgs[kbFocusIdx].classList.add('keyboard-focus');
+  msgs[kbFocusIdx].scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
 // ── Events ──────────────────────────────────────────────────────────────
 
 function setupEvents() {
-  // Message actions (delegated)
+  // Message actions
   document.getElementById('messages').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-action]');
     if (!btn) return;
@@ -212,7 +284,8 @@ function setupEvents() {
         if (!msg) break;
         const text = msg.role === 'user' ? msg.content : msg.parts.filter(p => p.type === 'text').map(p => p.content).join('\n\n');
         navigator.clipboard.writeText(text);
-        btn.innerHTML = IC.check; setTimeout(() => btn.innerHTML = IC.copy, 1500); break;
+        btn.innerHTML = IC.check; setTimeout(() => btn.innerHTML = IC.copy, 1500);
+        toast('Copied', 'success', 1500); break;
       }
     }
   });
@@ -227,19 +300,17 @@ function setupEvents() {
 
   // Note save
   document.getElementById('note-save').addEventListener('click', () => {
-    const text = document.getElementById('note-text').value.trim();
-    if (state.noteTarget) setAnnotation(state.noteTarget, 'note', text || false);
+    if (state.noteTarget) setAnnotation(state.noteTarget, 'note', document.getElementById('note-text').value.trim() || false);
     hideModal('note-modal'); state.noteTarget = null;
   });
 
-  // Context menu actions
+  // Context menu
   document.getElementById('context-menu').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-ctx]');
-    if (!btn) return;
-    ({ rename: renameSession, duplicate: duplicateSession, move: moveSession, delete: deleteSession })[btn.dataset.ctx]?.();
+    if (btn) ({ rename: renameSession, duplicate: duplicateSession, move: moveSession, delete: deleteSession })[btn.dataset.ctx]?.();
   });
 
-  // Close popups on outside click
+  // Close popups
   document.addEventListener('click', (e) => {
     if (!document.getElementById('context-menu').classList.contains('hidden') && !e.target.closest('#context-menu,.session-menu-btn')) hideContextMenu();
     const picker = document.getElementById('highlight-picker');
@@ -249,7 +320,7 @@ function setupEvents() {
   // Modal dismiss
   document.querySelectorAll('[data-dismiss]').forEach(el => el.addEventListener('click', () => hideModal(el.dataset.dismiss)));
 
-  // Search
+  // In-conversation search
   document.getElementById('btn-search').addEventListener('click', () => {
     const box = document.getElementById('search-box'); box.classList.toggle('hidden');
     if (!box.classList.contains('hidden')) document.getElementById('message-search').focus();
@@ -264,11 +335,12 @@ function setupEvents() {
     document.getElementById('search-count').textContent = state.searchQuery ? `${document.getElementById('messages').querySelectorAll('.message').length} found` : '';
   });
 
-  // Toolbar buttons
+  // Toolbar
   document.getElementById('btn-favorites').addEventListener('click', () => { state.favoritesOnly = !state.favoritesOnly; document.getElementById('btn-favorites').classList.toggle('toggled', state.favoritesOnly); renderMessages(); });
   document.getElementById('btn-live').addEventListener('click', () => { state.liveEnabled = !state.liveEnabled; document.getElementById('btn-live').classList.toggle('active', state.liveEnabled); watchSession(); });
   document.getElementById('btn-export').addEventListener('click', exportSession);
   document.getElementById('btn-memory').addEventListener('click', showMemory);
+  document.getElementById('btn-analytics').addEventListener('click', () => { navigate('analytics', {}); showAnalytics(null); });
   document.getElementById('btn-settings').addEventListener('click', showSettings);
   document.getElementById('settings-save').addEventListener('click', saveSettings);
   document.getElementById('btn-theme').addEventListener('click', () => {
@@ -285,20 +357,50 @@ function setupEvents() {
     }
   });
 
+  // Search module
+  setupSearch();
+
   // Keyboard shortcuts
   document.addEventListener('keydown', (e) => {
-    if (e.ctrlKey && e.key === 'f') { e.preventDefault(); document.getElementById('btn-search').click(); }
-    if (e.ctrlKey && e.key === 'b') { e.preventDefault(); document.getElementById('sidebar').classList.toggle('collapsed'); }
-    if (e.ctrlKey && e.key === 'e') { e.preventDefault(); exportSession(); }
+    // Don't capture when typing in inputs
+    const tag = e.target.tagName;
+    const inInput = tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+
+    if (e.ctrlKey && e.shiftKey && e.key === 'F') { e.preventDefault(); openSearch(); return; }
+    if (e.ctrlKey && e.key === 'f') { e.preventDefault(); document.getElementById('btn-search').click(); return; }
+    if (e.ctrlKey && e.key === 'b') { e.preventDefault(); document.getElementById('sidebar').classList.toggle('collapsed'); return; }
+    if (e.ctrlKey && e.key === 'e') { e.preventDefault(); exportSession(); return; }
+
     if (e.key === 'Escape') {
-      hideContextMenu(); document.getElementById('highlight-picker').classList.add('hidden');
+      closeSearch(); hideContextMenu(); document.getElementById('highlight-picker').classList.add('hidden');
       ['note-modal', 'move-modal', 'delete-modal', 'memory-modal', 'settings-modal'].forEach(id => hideModal(id));
       const box = document.getElementById('search-box');
       if (!box.classList.contains('hidden')) { box.classList.add('hidden'); state.searchQuery = ''; document.getElementById('message-search').value = ''; renderMessages(); }
+      return;
+    }
+
+    if (inInput) return;
+
+    // Vim-style navigation
+    if (e.key === 'j') { e.preventDefault(); kbNav(1); }
+    if (e.key === 'k') { e.preventDefault(); kbNav(-1); }
+    if (e.key === 'n') { e.preventDefault(); kbTurn(1); }
+    if (e.key === 'p') { e.preventDefault(); kbTurn(-1); }
+    if (e.key === '/' && !e.ctrlKey) { e.preventDefault(); openSearch(); }
+    if (e.key === 'g') {
+      // Wait for second key
+      const handler = (e2) => {
+        document.removeEventListener('keydown', handler);
+        if (e2.key === 's') { e2.preventDefault(); showSettings(); }
+        if (e2.key === 'a') { e2.preventDefault(); navigate('analytics', {}); showAnalytics(null); }
+        if (e2.key === 'm') { e2.preventDefault(); showMemory(); }
+      };
+      document.addEventListener('keydown', handler, { once: true });
+      setTimeout(() => document.removeEventListener('keydown', handler), 1000);
     }
   });
 
-  // Scroll tracking for rail
+  // Scroll tracking
   document.getElementById('messages').addEventListener('scroll', updateRailActive, { passive: true });
 
   setupResize();
@@ -314,28 +416,28 @@ function scrollToBottom() { document.getElementById('messages').scrollTop = docu
 (async () => {
   const saved = localStorage.getItem('theme');
   if (saved) document.documentElement.dataset.theme = saved;
+
+  // Register service worker
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});
+
   // Load settings
-  try {
-    const s = await api('/api/settings');
-    state.settings = { ...DEFAULTS, ...s };
-    applySettings();
-  } catch {}
+  try { state.settings = { ...DEFAULTS, ...(await api('/api/settings')) }; applySettings(); } catch {}
+
   setupEvents();
   connectWS();
   await loadProjects();
-  // Restore last viewed session
-  try {
-    const last = JSON.parse(localStorage.getItem('lastSession'));
-    if (last?.projectId && last?.sessionId) {
-      // Expand the project in sidebar
-      const header = document.querySelector(`.project-header[data-project="${last.projectId}"]`);
-      if (header && header.classList.contains('collapsed')) {
-        header.classList.remove('collapsed');
-        const container = header.nextElementSibling;
-        const sessions = await loadSessions(last.projectId);
-        renderSessionList(last.projectId, sessions, container);
+
+  // Handle initial route (URL hash or last session)
+  const route = getRoute();
+  if (route) {
+    await handleRoute(route);
+  } else {
+    try {
+      const last = JSON.parse(localStorage.getItem('lastSession'));
+      if (last?.projectId && last?.sessionId) {
+        navigate('session', last);
+        await loadSession(last.projectId, last.sessionId);
       }
-      await loadSession(last.projectId, last.sessionId);
-    }
-  } catch {}
+    } catch {}
+  }
 })();
