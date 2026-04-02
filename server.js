@@ -425,10 +425,53 @@ app.get('/api/bookmarks', (req, res) => {
           }
           if (text) results.push({ project, session, sessionName, uuid, role, text: text.slice(0, 200), ts });
         }
+      } else if (type === 'highlights') {
+        for (const [uuid, anno] of Object.entries(annotations)) {
+          if (uuid === '_meta' || !anno.highlight) continue;
+          let text = '', role = '', ts = '';
+          const fp = path.join(PROJECTS_DIR, project, `${session}.jsonl`);
+          if (fs.existsSync(fp)) {
+            for (const line of fs.readFileSync(fp, 'utf8').split('\n')) {
+              if (!line) continue;
+              try {
+                const m = JSON.parse(line);
+                if (m.uuid !== uuid) continue;
+                ts = m.timestamp || '';
+                if (m.type === 'user' && typeof m.message?.content === 'string') { text = m.message.content; role = 'user'; }
+                else if (m.type === 'assistant' && Array.isArray(m.message?.content)) { text = m.message.content.filter(b => b.type === 'text').map(b => b.text).join('\n'); role = 'assistant'; }
+                break;
+              } catch {}
+            }
+          }
+          if (text) results.push({ project, session, sessionName, uuid, role, color: anno.highlight, text: text.slice(0, 200), ts });
+        }
       } else if (type === 'notes') {
+        // Per-message comments
+        for (const [uuid, anno] of Object.entries(annotations)) {
+          if (uuid === '_meta') continue;
+          const text = anno.comment || anno.note;
+          if (!text) continue;
+          let msgText = '', role = '', ts = '';
+          const fp = path.join(PROJECTS_DIR, project, `${session}.jsonl`);
+          if (fs.existsSync(fp)) {
+            for (const line of fs.readFileSync(fp, 'utf8').split('\n')) {
+              if (!line) continue;
+              try {
+                const m = JSON.parse(line);
+                if (m.uuid !== uuid) continue;
+                ts = m.timestamp || '';
+                if (m.type === 'user' && typeof m.message?.content === 'string') { msgText = m.message.content; role = 'user'; }
+                else if (m.type === 'assistant' && Array.isArray(m.message?.content)) { msgText = m.message.content.filter(b => b.type === 'text').map(b => b.text).join('\n'); role = 'assistant'; }
+                break;
+              } catch {}
+            }
+          }
+          if (text) results.push({ project, session, sessionName, uuid, role, comment: text, text: (msgText || '').slice(0, 200), ts });
+        }
+        // Session-level notes (session scratchpad or legacy colorNotes)
         const meta = annotations._meta;
-        if (meta?.sessionNote || (meta?.colorNotes && Object.keys(meta.colorNotes).length)) {
-          results.push({ project, session, sessionName, hasSessionNote: !!meta.sessionNote, colorNoteCount: Object.keys(meta.colorNotes || {}).length });
+        if (meta?.sessionNote) {
+          results.push({ project, session, sessionName, uuid: '', role: '', comment: meta.sessionNote.slice(0, 200), text: 'Session note', ts: '' });
         }
       }
     }

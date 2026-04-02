@@ -30,6 +30,7 @@ export const state = {
   ws: null,
   searchQuery: '',
   favoritesOnly: false,
+  highlightsOnly: false,
   noteTarget: null,
   ctxTarget: null,
   subagentIndex: {},

@@ -121,13 +121,13 @@ function setStatus(cls, text) {
 
 // ── Annotations ─────────────────────────────────────────────────────────
 
-async function setAnnotation(uuid, key, value) {
+async function setAnnotation(uuid, key, value, { rerender = true } = {}) {
   try {
     state.annotations = await apiPost(
       `/api/annotations/${encodeURIComponent(state.currentProject)}/${encodeURIComponent(state.currentSession)}`,
       { uuid, key, value }
     );
-    renderMessages();
+    if (rerender) renderMessages();
   } catch (err) { toast(`Failed: ${err.message}`, 'error'); }
 }
 
@@ -207,38 +207,37 @@ async function saveSettings() {
 
 // ── Sidebar Tabs (Starred / Notes) ──────────────────────────────────────
 
+const PANELS = ['starred', 'highlights', 'notes'];
+const PANEL_LABELS = { starred: 'Starred', highlights: 'Highlights', notes: 'Notes' };
+const PANEL_TYPES = { starred: 'favorites', highlights: 'highlights', notes: 'notes' };
+
 async function toggleSidebarPanel(panel) {
   const el = document.getElementById(`sidebar-${panel}`);
-  const btn = document.querySelector(`.sidebar-action-btn[data-tab="${panel}"]`);
-  const other = panel === 'starred' ? 'notes' : 'starred';
-  const otherEl = document.getElementById(`sidebar-${other}`);
-  const otherBtn = document.querySelector(`.sidebar-action-btn[data-tab="${other}"]`);
+  const btn = document.querySelector(`.sidebar-menu-item[data-tab="${panel}"]`);
 
-  // Close other panel
-  otherEl?.classList.add('hidden');
-  otherBtn?.classList.remove('active');
+  // Close all other panels
+  for (const p of PANELS) {
+    if (p === panel) continue;
+    document.getElementById(`sidebar-${p}`)?.classList.add('hidden');
+    document.querySelector(`.sidebar-menu-item[data-tab="${p}"]`)?.classList.remove('active');
+  }
 
   // Toggle this panel
   const opening = el.classList.contains('hidden');
   el.classList.toggle('hidden');
   btn?.classList.toggle('active', opening);
-
   if (!opening) return;
 
-  // Load content
-  el.innerHTML = `<div class="sidebar-panel-close"><span>${panel === 'starred' ? 'Starred' : 'Notes'}</span><button data-close="${panel}">&times;</button></div><div style="padding:16px;color:var(--text-muted);font-size:12px">Loading...</div>`;
+  el.innerHTML = `<div class="sidebar-panel-close"><span>${PANEL_LABELS[panel]}</span><button data-close="${panel}">&times;</button></div><div style="padding:16px;color:var(--text-muted);font-size:12px">Loading...</div>`;
+  el.querySelector(`[data-close="${panel}"]`)?.addEventListener('click', () => { el.classList.add('hidden'); btn?.classList.remove('active'); });
 
-  el.querySelector(`[data-close="${panel}"]`)?.addEventListener('click', () => {
-    el.classList.add('hidden');
-    btn?.classList.remove('active');
-  });
+  try {
+    const items = await api(`/api/bookmarks?type=${PANEL_TYPES[panel]}`);
+    const header = el.querySelector('.sidebar-panel-close').outerHTML;
+    if (!items.length) { el.innerHTML = header + `<div style="padding:16px;color:var(--text-muted);font-size:12px">No ${PANEL_LABELS[panel].toLowerCase()} yet</div>`; return; }
 
-  if (panel === 'starred') {
-    try {
-      const items = await api('/api/bookmarks?type=favorites');
-      const content = el.querySelector('.sidebar-panel-close').outerHTML;
-      if (!items.length) { el.innerHTML = content + '<div style="padding:16px;color:var(--text-muted);font-size:12px">No starred messages</div>'; return; }
-      el.innerHTML = content + items.map(item => `
+    if (panel === 'starred') {
+      el.innerHTML = header + items.map(item => `
         <div class="bookmark-item" data-project="${escapeHtml(item.project)}" data-session="${item.session}" data-uuid="${item.uuid}">
           <div class="bookmark-header">
             <span class="bookmark-role ${item.role}">${item.role === 'user' ? 'You' : 'Claude'}</span>
@@ -247,34 +246,47 @@ async function toggleSidebarPanel(panel) {
           </div>
           <div class="bookmark-text">${escapeHtml(item.text.slice(0, 120))}</div>
         </div>`).join('');
-    } catch { /* keep loading text */ }
-  } else {
-    try {
-      const items = await api('/api/bookmarks?type=notes');
-      const content = el.querySelector('.sidebar-panel-close').outerHTML;
-      if (!items.length) { el.innerHTML = content + '<div style="padding:16px;color:var(--text-muted);font-size:12px">No sessions with notes</div>'; return; }
-      el.innerHTML = content + items.map(item => `
-        <div class="bookmark-item" data-project="${escapeHtml(item.project)}" data-session="${item.session}">
-          <div class="bookmark-header"><span class="bookmark-session">${escapeHtml(item.sessionName)}</span></div>
-          <div class="bookmark-meta">
-            ${item.hasSessionNote ? '<span>Session note</span>' : ''}
-            ${item.colorNoteCount ? `<span>${item.colorNoteCount} comment${item.colorNoteCount > 1 ? 's' : ''}</span>` : ''}
+    } else if (panel === 'highlights') {
+      el.innerHTML = header + items.map(item => `
+        <div class="bookmark-item" data-project="${escapeHtml(item.project)}" data-session="${item.session}" data-uuid="${item.uuid}">
+          <div class="bookmark-header">
+            <span class="bookmark-color" style="background:${item.color}"></span>
+            <span class="bookmark-role ${item.role}">${item.role === 'user' ? 'You' : 'Claude'}</span>
+            <span class="bookmark-session">${escapeHtml(item.sessionName)}</span>
+          </div>
+          <div class="bookmark-text">${escapeHtml(item.text.slice(0, 120))}</div>
+        </div>`).join('');
+    } else {
+      el.innerHTML = header + items.map(item => `
+        <div class="bookmark-item" data-project="${escapeHtml(item.project)}" data-session="${item.session}" data-uuid="${item.uuid || ''}">
+          <div class="bookmark-header">
+            <span class="bookmark-session">${escapeHtml(item.sessionName)}</span>
+            <span class="bookmark-time">${item.ts ? new Date(item.ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) : ''}</span>
+          </div>
+          <div class="bookmark-comment">${escapeHtml(item.comment || '')}</div>
+          <div class="bookmark-context">
+            <span class="bookmark-role ${item.role}">${item.role === 'user' ? 'You' : 'Claude'}:</span>
+            ${escapeHtml((item.text || '').slice(0, 100))}
           </div>
         </div>`).join('');
-    } catch { /* keep loading text */ }
-  }
+    }
+  } catch { /* keep loading text */ }
 
-  // Re-wire close button (innerHTML replaced)
+  // Re-wire close button
   el.querySelector(`[data-close="${panel}"]`)?.addEventListener('click', () => { el.classList.add('hidden'); btn?.classList.remove('active'); });
 
   // Wire bookmark clicks
   el.querySelectorAll('.bookmark-item').forEach(bi => bi.addEventListener('click', () => {
     navigate('session', { projectId: bi.dataset.project, sessionId: bi.dataset.session });
     loadSession(bi.dataset.project, bi.dataset.session).then(() => {
+      // Open notes panel so user can see all comments
+      const notesPanel = document.getElementById('notes-panel');
+      if (notesPanel.classList.contains('hidden')) toggleNotesPanel();
+      // Scroll to the specific message
       if (bi.dataset.uuid) setTimeout(() => {
         const msg = document.querySelector(`.message[data-uuid="${bi.dataset.uuid}"]`);
         if (msg) { msg.scrollIntoView({ behavior: 'smooth', block: 'center' }); msg.querySelector('.message-inner')?.classList.add('flash'); }
-      }, 300);
+      }, 400);
     });
   }));
 }
@@ -398,20 +410,19 @@ function setupEvents() {
   });
 
   // Comment auto-save on blur
-  document.getElementById('messages').addEventListener('focusout', (e) => {
+  document.getElementById('messages').addEventListener('focusout', async (e) => {
     if (!e.target.classList.contains('comment-input')) return;
     const uuid = e.target.dataset.uuid;
     const text = e.target.value.trim();
     if (text) {
-      setAnnotation(uuid, 'comment', text);
-      // Also migrate old 'note' key to 'comment'
-      if (state.annotations[uuid]?.note) setAnnotation(uuid, 'note', false);
+      await setAnnotation(uuid, 'comment', text, { rerender: false });
+      if (state.annotations[uuid]?.note) await setAnnotation(uuid, 'note', false, { rerender: false });
     } else {
-      setAnnotation(uuid, 'comment', false);
+      await setAnnotation(uuid, 'comment', false, { rerender: false });
       e.target.closest('.msg-comment')?.remove();
-      // Check if any comments remain
       if (!document.querySelector('#messages .msg-comment')) document.getElementById('messages').classList.remove('has-comments');
     }
+    renderNotesPanel();
   });
 
   // Delete comment
@@ -420,10 +431,11 @@ function setupEvents() {
     if (!btn) return;
     e.stopPropagation();
     const uuid = btn.dataset.uuid;
-    await setAnnotation(uuid, 'comment', false);
-    if (state.annotations[uuid]?.note) await setAnnotation(uuid, 'note', false);
+    await setAnnotation(uuid, 'comment', false, { rerender: false });
+    if (state.annotations[uuid]?.note) await setAnnotation(uuid, 'note', false, { rerender: false });
     btn.closest('.msg-comment')?.remove();
     if (!document.querySelector('#messages .msg-comment')) document.getElementById('messages').classList.remove('has-comments');
+    renderNotesPanel();
   });
 
   // Session note save (in notes panel)
@@ -464,6 +476,7 @@ function setupEvents() {
   });
 
   // Toolbar
+  document.getElementById('btn-highlights').addEventListener('click', () => { state.highlightsOnly = !state.highlightsOnly; document.getElementById('btn-highlights').classList.toggle('toggled', state.highlightsOnly); renderMessages(); });
   document.getElementById('btn-favorites').addEventListener('click', () => { state.favoritesOnly = !state.favoritesOnly; document.getElementById('btn-favorites').classList.toggle('toggled', state.favoritesOnly); renderMessages(); });
   document.getElementById('btn-live').addEventListener('click', () => { state.liveEnabled = !state.liveEnabled; document.getElementById('btn-live').classList.toggle('active', state.liveEnabled); watchSession(); });
   document.getElementById('btn-export').addEventListener('click', exportSession);
@@ -485,10 +498,11 @@ function setupEvents() {
   document.getElementById('btn-sidebar-open').addEventListener('click', () => document.getElementById('sidebar').classList.remove('collapsed'));
   document.getElementById('btn-settings-mini').addEventListener('click', showSettings);
 
-  // Sidebar action buttons (Starred / Notes) - toggle panels
-  document.querySelectorAll('.sidebar-action-btn').forEach(btn => {
+  // Sidebar menu items
+  document.querySelectorAll('.sidebar-menu-item[data-tab]').forEach(btn => {
     btn.addEventListener('click', () => toggleSidebarPanel(btn.dataset.tab));
   });
+  document.getElementById('btn-global-search').addEventListener('click', () => openSearch());
 
   // Mini sidebar actions
   document.querySelectorAll('.mini-action').forEach(btn => {
@@ -606,7 +620,7 @@ function startTips() {
 
 (async () => {
   const saved = localStorage.getItem('theme');
-  if (saved) document.documentElement.dataset.theme = saved;
+  document.documentElement.dataset.theme = saved || 'light';
 
   // Register service worker
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('/sw.js').catch(() => {});

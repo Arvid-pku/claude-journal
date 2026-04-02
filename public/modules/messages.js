@@ -51,6 +51,7 @@ export function renderMessages() {
 
   let msgs = state.displayMessages;
   if (state.favoritesOnly) msgs = msgs.filter(m => state.annotations[m.uuid]?.favorite);
+  if (state.highlightsOnly) msgs = msgs.filter(m => state.annotations[m.uuid]?.highlight);
   if (state.searchQuery) {
     const q = state.searchQuery.toLowerCase();
     msgs = msgs.filter(m => m.role === 'user' ? m.content.toLowerCase().includes(q) : m.parts?.some(p => (p.type === 'text' && p.content.toLowerCase().includes(q)) || (p.type === 'tool_use' && p.name.toLowerCase().includes(q))));

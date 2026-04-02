@@ -158,28 +158,7 @@ html, body {
   min-width: 0;
 }
 
-.sidebar-search {
-  padding: 10px 12px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  border-bottom: 1px solid var(--border);
-  flex-shrink: 0;
-}
-
-.sidebar-search svg { color: var(--text-muted); flex-shrink: 0; }
-
-.sidebar-search input {
-  flex: 1;
-  background: none;
-  border: none;
-  outline: none;
-  color: var(--text-primary);
-  font-size: 13px;
-  font-family: var(--font-sans);
-}
-
-.sidebar-search input::placeholder { color: var(--text-muted); }
+/* (old sidebar-search replaced by sidebar-search-inline + sidebar-menu) */
 
 .sidebar-nav {
   flex: 1;
@@ -1455,36 +1434,65 @@ mark.search-hit {
   .settings-columns { flex-direction: column; gap: 16px; }
 }
 
-/* ── Sidebar Action Buttons (Starred / Notes) ──────────────────────────── */
+/* ── Sidebar Menu (Claude.ai style) ────────────────────────────────────── */
 
-.sidebar-actions {
-  display: flex;
-  gap: 6px;
-  padding: 8px 12px;
+.sidebar-menu {
+  padding: 8px 10px 4px;
   flex-shrink: 0;
 }
 
-.sidebar-action-btn {
-  flex: 1;
+.sidebar-menu-item {
   display: flex;
   align-items: center;
-  justify-content: center;
-  gap: 6px;
-  padding: 6px 0;
-  border: 1px solid var(--border);
-  border-radius: 6px;
+  gap: 12px;
+  width: 100%;
+  padding: 8px 10px;
+  border: none;
   background: none;
-  color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 500;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 400;
   font-family: var(--font-sans);
   cursor: pointer;
-  transition: all var(--transition);
+  border-radius: 8px;
+  transition: background var(--transition);
 }
 
-.sidebar-action-btn:hover { background: var(--bg-hover); color: var(--text-primary); }
-.sidebar-action-btn.active { background: var(--accent-dim); color: var(--accent); border-color: var(--accent); }
-.sidebar-action-btn svg { flex-shrink: 0; }
+.sidebar-menu-item:hover { background: var(--bg-hover); }
+.sidebar-menu-item.active { background: var(--accent-dim); color: var(--accent); }
+.sidebar-menu-item svg { color: var(--text-secondary); flex-shrink: 0; }
+.sidebar-menu-item:hover svg { color: var(--text-primary); }
+.sidebar-menu-item.active svg { color: var(--accent); }
+
+.sidebar-section-label {
+  padding: 12px 14px 4px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-muted);
+  flex-shrink: 0;
+}
+
+.sidebar-search-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 4px 14px 6px;
+  flex-shrink: 0;
+}
+
+.sidebar-search-inline svg { color: var(--text-muted); flex-shrink: 0; }
+
+.sidebar-search-inline input {
+  flex: 1;
+  background: none;
+  border: none;
+  outline: none;
+  color: var(--text-primary);
+  font-size: 12px;
+  font-family: var(--font-sans);
+}
+
+.sidebar-search-inline input::placeholder { color: var(--text-muted); }
 
 .sidebar-panel {
   flex: 1;
@@ -1561,6 +1569,34 @@ mark.search-hit {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
+}
+
+.bookmark-color {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.bookmark-comment {
+  font-size: 12px;
+  color: var(--accent);
+  font-weight: 500;
+  line-height: 1.4;
+  margin-bottom: 2px;
+  border-left: 2px solid var(--accent);
+  padding-left: 6px;
+}
+
+.bookmark-context {
+  font-size: 11px;
+  color: var(--text-muted);
+  line-height: 1.4;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  margin-top: 2px;
 }
 
 .bookmark-meta {
