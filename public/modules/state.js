@@ -36,6 +36,7 @@ export const state = {
   subagentIndex: {},
   subagentMsgs: {},
   memoryCache: {},
+  projectsEmpty: null,
   settings: { ...DEFAULTS },
 };
 

@@ -7,12 +7,23 @@
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>C</text></svg>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+    rel="stylesheet" media="print" onload="this.media='all'" onerror="this.onerror=null">
+  <noscript><link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet"></noscript>
   <link rel="manifest" href="/manifest.json">
   <meta name="theme-color" content="#0b0d14">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css"
+    onerror="this.onerror=null;this.href='/style.css'">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/marked/12.0.1/marked.min.js"></script>
+  <script>
+    // CDN fallback: provide stubs if libraries failed to load (e.g. offline)
+    if (typeof hljs === 'undefined') { window.hljs = { highlight: (c) => ({ value: c }), highlightAuto: (c) => ({ value: c }), getLanguage: () => false }; }
+    if (typeof marked === 'undefined') {
+      window.marked = { parse: (t) => t.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>'),
+        setOptions: () => {} };
+    }
+  </script>
   <link rel="stylesheet" href="/style.css">
 </head>
 <body>
@@ -285,6 +296,37 @@
         <button class="btn btn-ghost" data-dismiss="confirm-modal">Cancel</button>
         <button class="btn btn-danger" id="confirm-ok">Confirm</button>
       </div>
+    </div>
+  </div>
+
+  <!-- Keyboard shortcuts modal -->
+  <div id="shortcuts-modal" class="modal hidden">
+    <div class="modal-backdrop" data-dismiss="shortcuts-modal"></div>
+    <div class="modal-content modal-wide">
+      <h3>Keyboard Shortcuts</h3>
+      <div class="shortcuts-grid">
+        <div class="shortcuts-section">
+          <h4>Navigation</h4>
+          <div class="sc-row"><kbd>j</kbd> / <kbd>k</kbd><span>Move between messages</span></div>
+          <div class="sc-row"><kbd>n</kbd> / <kbd>p</kbd><span>Jump between turns</span></div>
+          <div class="sc-row"><kbd>g</kbd> <kbd>h</kbd><span>Go home</span></div>
+          <div class="sc-row"><kbd>g</kbd> <kbd>a</kbd><span>Analytics</span></div>
+          <div class="sc-row"><kbd>g</kbd> <kbd>m</kbd><span>Project memory</span></div>
+          <div class="sc-row"><kbd>g</kbd> <kbd>n</kbd><span>Notes panel</span></div>
+          <div class="sc-row"><kbd>g</kbd> <kbd>s</kbd><span>Settings</span></div>
+        </div>
+        <div class="shortcuts-section">
+          <h4>Actions</h4>
+          <div class="sc-row"><kbd>/</kbd><span>Global search</span></div>
+          <div class="sc-row"><kbd>Ctrl+F</kbd><span>Search in session</span></div>
+          <div class="sc-row"><kbd>Ctrl+Shift+F</kbd><span>Global search</span></div>
+          <div class="sc-row"><kbd>Ctrl+B</kbd><span>Toggle sidebar</span></div>
+          <div class="sc-row"><kbd>Ctrl+E</kbd><span>Export as Markdown</span></div>
+          <div class="sc-row"><kbd>Escape</kbd><span>Close modal / popup</span></div>
+          <div class="sc-row"><kbd>?</kbd><span>Show this help</span></div>
+        </div>
+      </div>
+      <div class="modal-actions"><button class="btn btn-ghost" data-dismiss="shortcuts-modal">Close</button></div>
     </div>
   </div>
 

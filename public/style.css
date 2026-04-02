@@ -1623,6 +1623,7 @@ mark.search-hit {
 /* ── Side Comments (Google Docs style) ─────────────────────────────────── */
 
 .msg-comment {
+  position: relative;
   width: 200px;
   flex-shrink: 0;
   margin-top: 8px;
@@ -2620,6 +2621,136 @@ mark.search-hit {
 
 .shortcut-grid kbd {
   margin-right: 4px;
+}
+
+/* ── Empty Welcome (first-run) ─────────────────────────────────────────── */
+
+.empty-welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 16px;
+  padding: 40px 20px;
+  max-width: 520px;
+  margin: 0 auto;
+}
+
+.empty-welcome-icon { margin-bottom: 8px; opacity: 0.8; }
+
+.empty-welcome h2 {
+  font-size: 20px;
+  font-weight: 600;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.empty-welcome > p {
+  font-size: 14px;
+  color: var(--text-secondary);
+  line-height: 1.5;
+  margin: 0;
+}
+
+.empty-welcome-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  background: var(--bg-elevated);
+  border-radius: var(--radius);
+  padding: 16px 20px;
+  margin-top: 8px;
+}
+
+.empty-step {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+
+.step-num {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  background: var(--accent-dim);
+  color: var(--accent);
+  font-weight: 600;
+  font-size: 12px;
+  flex-shrink: 0;
+}
+
+.empty-welcome-dir {
+  font-size: 12px;
+  color: var(--text-muted);
+}
+
+.empty-welcome-dir code {
+  background: var(--bg-elevated);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: var(--font-mono);
+  font-size: 11px;
+}
+
+/* ── Keyboard Shortcuts Modal ──────────────────────────────────────────── */
+
+.shortcuts-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 24px;
+  margin: 16px 0;
+}
+
+.shortcuts-section h4 {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  margin: 0 0 10px;
+}
+
+.sc-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  padding: 4px 0;
+}
+
+.sc-row kbd { min-width: 24px; text-align: center; }
+
+.sc-row span { flex: 1; }
+
+/* ── Comment Saved Badge ───────────────────────────────────────────────── */
+
+.comment-saved {
+  position: absolute;
+  bottom: 4px;
+  right: 4px;
+  font-size: 11px;
+  color: var(--green);
+  opacity: 0;
+  transition: opacity 300ms ease;
+  pointer-events: none;
+}
+
+.comment-saved.show { opacity: 1; }
+
+/* ── Toast Info ────────────────────────────────────────────────────────── */
+
+.toast-info {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  border-left: 3px solid var(--accent);
 }
 
 /* ── Print ─────────────────────────────────────────────────────────────── */

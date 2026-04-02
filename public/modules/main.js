@@ -27,7 +27,16 @@ setSearchNavigate((pid, sid, uuid) => {
 // ── Data loading ────────────────────────────────────────────────────────
 
 async function loadProjects() {
-  state.projects = await api('/api/projects');
+  const data = await api('/api/projects');
+  // Handle empty state (no projects directory or no sessions)
+  if (data && data.empty) {
+    state.projects = [];
+    state.projectsEmpty = data;
+    renderSidebar();
+    return;
+  }
+  state.projects = Array.isArray(data) ? data : [];
+  state.projectsEmpty = null;
   renderSidebar();
 }
 
@@ -105,6 +114,33 @@ function goHome() {
 async function showHome() {
   const container = document.getElementById('messages');
 
+  // Handle empty state — no projects found
+  if (state.projectsEmpty) {
+    const info = state.projectsEmpty;
+    container.innerHTML = `
+      <div class="home-page">
+        <div class="home-hero">
+          <h1>Claude Journal</h1>
+          <p>View, annotate, search, and analyze your Claude Code conversations</p>
+        </div>
+        <div class="empty-welcome">
+          <div class="empty-welcome-icon">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+          </div>
+          <h2>No conversations found</h2>
+          <p>${escapeHtml(info.message)}</p>
+          <div class="empty-welcome-steps">
+            <div class="empty-step"><span class="step-num">1</span><span>Install Claude Code: <kbd>npm i -g @anthropic-ai/claude-code</kbd></span></div>
+            <div class="empty-step"><span class="step-num">2</span><span>Start a conversation: <kbd>claude</kbd></span></div>
+            <div class="empty-step"><span class="step-num">3</span><span>Refresh this page to see your sessions</span></div>
+          </div>
+          <p class="empty-welcome-dir">Looking in: <code>${escapeHtml(info.dir)}</code></p>
+          <button class="btn btn-primary" onclick="document.getElementById('btn-settings').click()">Change Directory</button>
+        </div>
+      </div>`;
+    return;
+  }
+
   // Gather quick stats
   let totalSessions = 0, totalCost = 0;
   for (const p of state.projects) totalSessions += p.sessionCount || 0;
@@ -161,6 +197,7 @@ async function showHome() {
           <div><kbd>g</kbd> <kbd>m</kbd> Memory</div>
           <div><kbd>g</kbd> <kbd>n</kbd> Notes panel</div>
           <div><kbd>g</kbd> <kbd>h</kbd> Home</div>
+          <div><kbd>?</kbd> Show this help</div>
         </div>
       </div>
     </div>`;
@@ -178,10 +215,13 @@ onRouteChange(handleRoute);
 
 // ── WebSocket ───────────────────────────────────────────────────────────
 
+let wsReconnectDelay = 1000;
+
 function connectWS() {
   const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
   state.ws = new WebSocket(`${proto}//${location.host}`);
   state.ws.onopen = () => {
+    wsReconnectDelay = 1000; // reset on successful connect
     setStatus('connected', 'Connected');
     if (state.currentProject && state.currentSession && state.liveEnabled) watchSession();
   };
@@ -195,7 +235,11 @@ function connectWS() {
         .then(a => { state.annotations = a; renderMessages(); if (scrolled && state.settings.autoScrollLive) scrollToBottom(); });
     }
   };
-  state.ws.onclose = () => { setStatus('', 'Disconnected'); setTimeout(connectWS, 3000); };
+  state.ws.onclose = () => {
+    setStatus('', 'Disconnected');
+    setTimeout(connectWS, wsReconnectDelay);
+    wsReconnectDelay = Math.min(wsReconnectDelay * 2, 30000); // exponential backoff, max 30s
+  };
   state.ws.onerror = () => state.ws.close();
 }
 
@@ -281,6 +325,8 @@ async function saveSettings() {
   }
   try {
     const saved = await apiPut('/api/settings', payload);
+    const warnings = saved._warnings;
+    delete saved._warnings;
     state.settings = { ...DEFAULTS, ...saved };
     applySettings();
     // Apply theme
@@ -293,7 +339,11 @@ async function saveSettings() {
       const c = document.querySelector(`.project-sessions[data-project="${pid}"]`);
       if (c) renderSessionList(pid, sessions, c);
     }
-    toast('Settings saved', 'success');
+    if (warnings?.length) {
+      for (const w of warnings) toast(w, 'info', 6000);
+    } else {
+      toast('Settings saved', 'success');
+    }
   } catch (err) { toast(`Failed: ${err.message}`, 'error'); }
 }
 
@@ -452,7 +502,7 @@ function exportSession() {
   a.href = URL.createObjectURL(new Blob([md], { type: 'text/markdown' }));
   a.download = `claude-${state.currentSession?.slice(0, 8) || 'export'}.md`;
   a.click();
-  toast('Exported', 'success');
+  toast('Exported as Markdown', 'success', 4000);
 }
 
 function formatTime(ts) { return ts ? new Date(ts).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) : ''; }
@@ -482,6 +532,14 @@ function kbTurn(dir) {
   kbFocusIdx = target;
   msgs[kbFocusIdx].classList.add('keyboard-focus');
   msgs[kbFocusIdx].scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+
+// ── Keyboard Help ──────────────────────────────────────────────────────
+
+function showKeyboardHelp() {
+  const el = document.getElementById('shortcuts-modal');
+  if (!el.classList.contains('hidden')) { hideModal('shortcuts-modal'); return; }
+  showModal('shortcuts-modal');
 }
 
 // ── Events ──────────────────────────────────────────────────────────────
@@ -589,12 +647,21 @@ function setupEvents() {
     if (!e.target.classList.contains('comment-input')) return;
     const uuid = e.target.dataset.uuid;
     const text = e.target.value.trim();
+    const card = e.target.closest('.msg-comment');
     if (text) {
       await setAnnotation(uuid, 'comment', text, { rerender: false });
       if (state.annotations[uuid]?.note) await setAnnotation(uuid, 'note', false, { rerender: false });
+      // Show "Saved" indicator
+      if (card) {
+        let badge = card.querySelector('.comment-saved');
+        if (!badge) { badge = document.createElement('span'); badge.className = 'comment-saved'; card.appendChild(badge); }
+        badge.textContent = 'Saved';
+        badge.classList.add('show');
+        setTimeout(() => badge.classList.remove('show'), 1500);
+      }
     } else {
       await setAnnotation(uuid, 'comment', false, { rerender: false });
-      e.target.closest('.msg-comment')?.remove();
+      card?.remove();
       if (!document.querySelector('#messages .msg-comment')) document.getElementById('messages').classList.remove('has-comments');
     }
     renderNotesPanel();
@@ -719,7 +786,7 @@ function setupEvents() {
 
     if (e.key === 'Escape') {
       closeSearch(); hideContextMenu(); document.getElementById('highlight-picker').classList.add('hidden');
-      ['note-modal', 'move-modal', 'delete-modal', 'memory-modal', 'settings-modal', 'confirm-modal'].forEach(id => hideModal(id));
+      ['note-modal', 'move-modal', 'delete-modal', 'memory-modal', 'settings-modal', 'confirm-modal', 'shortcuts-modal'].forEach(id => hideModal(id));
       const box = document.getElementById('search-box');
       if (!box.classList.contains('hidden')) { box.classList.add('hidden'); state.searchQuery = ''; document.getElementById('message-search').value = ''; renderMessages(); }
       return;
@@ -733,6 +800,7 @@ function setupEvents() {
     if (e.key === 'n') { e.preventDefault(); kbTurn(1); }
     if (e.key === 'p') { e.preventDefault(); kbTurn(-1); }
     if (e.key === '/' && !e.ctrlKey) { e.preventDefault(); openSearch(); }
+    if (e.key === '?') { e.preventDefault(); showKeyboardHelp(); }
     if (e.key === 'g') {
       // Wait for second key
       const handler = (e2) => {
@@ -782,6 +850,7 @@ const TIPS = [
   'Install as a PWA for a native app experience',
   'Cost estimates are shown per message and per session',
   'Press Escape to close any modal or popup',
+  'Press ? to see all keyboard shortcuts',
 ];
 
 let tipIdx = Math.floor(Math.random() * TIPS.length);

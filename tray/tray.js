@@ -11,6 +11,7 @@ let tray = null;
 let serverProcess = null;
 let port = 8086;
 let serverReady = false;
+let output = '';
 
 // Don't show in dock (macOS)
 if (app.dock) app.dock.hide();
@@ -60,7 +61,7 @@ function startServer() {
     silent: true,
   });
 
-  let output = '';
+  output = '';
 
   serverProcess.stdout?.on('data', (data) => {
     output += data.toString();
@@ -135,8 +136,6 @@ function updateMenu(status) {
     tray?.on('click', () => shell.openExternal(url));
   }
 }
-
-let output = '';
 
 app.on('before-quit', () => {
   if (serverProcess) serverProcess.kill();

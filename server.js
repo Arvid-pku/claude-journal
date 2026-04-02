@@ -185,14 +185,29 @@ app.put('/api/settings', (req, res) => {
   let current = {};
   if (fs.existsSync(SETTINGS_PATH)) { try { current = JSON.parse(fs.readFileSync(SETTINGS_PATH, 'utf8')); } catch {} }
   const updated = { ...current, ...req.body };
+  // Validate projects directory if changed
+  const warnings = [];
+  if (updated.projectsDir && updated.projectsDir !== current.projectsDir) {
+    const resolved = updated.projectsDir.replace(/^~/, process.env.HOME || process.env.USERPROFILE || '');
+    if (!fs.existsSync(resolved)) {
+      warnings.push(`Directory "${updated.projectsDir}" does not exist. It will be checked on next restart.`);
+    }
+  }
+  if (updated.projectsDir !== current.projectsDir || (updated.port && updated.port !== current.port)) {
+    warnings.push('Changes to projects directory or port require a server restart to take effect.');
+  }
   atomicWrite(SETTINGS_PATH, JSON.stringify(updated, null, 2));
-  res.json(updated);
+  res.json({ ...updated, _warnings: warnings.length ? warnings : undefined });
 });
 
 // ── Projects ────────────────────────────────────────────────────────────────
 
 app.get('/api/projects', (_req, res) => {
   try {
+    if (!fs.existsSync(PROJECTS_DIR)) {
+      return res.json({ empty: true, dir: PROJECTS_DIR, reason: 'directory_not_found',
+        message: `Projects directory not found at ${PROJECTS_DIR}. Start a conversation with Claude Code to create one, or check the path in Settings.` });
+    }
     const entries = fs.readdirSync(PROJECTS_DIR, { withFileTypes: true });
     const projects = entries
       .filter(e => e.isDirectory())
@@ -215,6 +230,10 @@ app.get('/api/projects', (_req, res) => {
       })
       .filter(p => p.sessionCount > 0)
       .sort((a, b) => a.projectPath.localeCompare(b.projectPath));
+    if (!projects.length) {
+      return res.json({ empty: true, dir: PROJECTS_DIR, reason: 'no_sessions',
+        message: `No Claude Code sessions found in ${PROJECTS_DIR}. Start a conversation with Claude Code to create one.` });
+    }
     res.json(projects);
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
@@ -717,7 +736,9 @@ app.post('/api/sessions/:project/:session/move', (req, res) => {
     if (!fs.existsSync(dstDir)) return res.status(404).json({ error: 'Target not found' });
     const srcFile = path.join(srcDir, `${req.params.session}.jsonl`);
     if (!fs.existsSync(srcFile)) return res.status(404).json({ error: 'Not found' });
-    fs.copyFileSync(srcFile, path.join(dstDir, `${req.params.session}.jsonl`));
+    const dstFile = path.join(dstDir, `${req.params.session}.jsonl`);
+    if (fs.existsSync(dstFile)) return res.status(409).json({ error: 'A session with the same ID already exists in the target project' });
+    fs.copyFileSync(srcFile, dstFile);
     fs.unlinkSync(srcFile);
     const srcSub = path.join(srcDir, req.params.session);
     if (fs.existsSync(srcSub)) { fs.cpSync(srcSub, path.join(dstDir, req.params.session), { recursive: true }); fs.rmSync(srcSub, { recursive: true, force: true }); }
@@ -801,10 +822,18 @@ function startServer(port, maxRetries = 10) {
 function actualStart(port) {
   server.listen(port, '0.0.0.0', () => {
     const url = `http://localhost:${port}`;
-    console.log(`\n  Claude Journal`);
-    console.log(`  ${url}\n`);
+    let version = '';
+    try { version = ' v' + require('./package.json').version; } catch {}
+    console.log('');
+    console.log(`  \x1b[1mClaude Journal${version}\x1b[0m`);
+    console.log(`  \x1b[36m${url}\x1b[0m`);
+    console.log(`  \x1b[2mProjects: ${PROJECTS_DIR}\x1b[0m`);
+    console.log(`  \x1b[2mPress Ctrl+C to stop\x1b[0m`);
+    console.log('');
     // Export actual port for CLI/tray to use
     process.env.CLAUDE_JOURNAL_PORT = String(port);
+    // Write port file for daemon mode to read
+    try { fs.writeFileSync(path.join(require('os').tmpdir(), 'claude-journal.port'), String(port)); } catch {}
     if (settings.autoOpen) {
       const cmd = process.platform === 'darwin' ? 'open' : process.platform === 'win32' ? 'start' : 'xdg-open';
       exec(`${cmd} ${url}`, () => {});

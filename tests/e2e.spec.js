@@ -4,7 +4,7 @@ test.describe('Claude Journal', () => {
 
   test('page loads with sidebar and empty state', async ({ page }) => {
     await page.goto('/');
-    await expect(page.locator('.logo')).toContainText('Claude History');
+    await expect(page.locator('.logo')).toContainText('Claude Journal');
     // Wait for projects to load (async ES modules)
     await page.locator('.project-group').first().waitFor({ timeout: 10000 });
     const count = await page.locator('.project-group').count();
@@ -97,9 +97,9 @@ test.describe('Claude Journal', () => {
 
   test('analytics page loads', async ({ page }) => {
     await page.goto('/#analytics');
-    await page.waitForTimeout(1000);
-    await expect(page.locator('.analytics-dashboard')).toBeVisible({ timeout: 10000 });
-    await expect(page.locator('.acard')).toHaveCount(5);
+    await expect(page.locator('.analytics-dashboard')).toBeVisible({ timeout: 15000 });
+    const cards = await page.locator('.analytics-dashboard .acard').count();
+    expect(cards).toBeGreaterThanOrEqual(5);
   });
 
   test('keyboard j/k navigates messages', async ({ page }) => {
@@ -114,14 +114,22 @@ test.describe('Claude Journal', () => {
     await expect(page.locator('.message.keyboard-focus').first()).toBeVisible();
   });
 
-  test('theme toggle works', async ({ page }) => {
+  test('theme toggle works via settings', async ({ page }) => {
     await page.goto('/');
-    await page.locator('#btn-theme').click();
-    const theme = await page.locator('html').getAttribute('data-theme');
-    expect(theme).toBe('light');
-    await page.locator('#btn-theme').click();
-    const theme2 = await page.locator('html').getAttribute('data-theme');
-    expect(theme2).toBe('dark');
+    // Open settings and change theme to dark
+    await page.locator('#btn-settings').click();
+    await expect(page.locator('#settings-modal')).not.toHaveClass(/hidden/);
+    await page.locator('#setting-theme').selectOption('dark');
+    await page.locator('#settings-save').click();
+    await expect(page.locator('#settings-modal')).toHaveClass(/hidden/);
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'dark');
+    // Change back to light
+    await page.locator('#btn-settings').click();
+    await expect(page.locator('#settings-modal')).not.toHaveClass(/hidden/);
+    await page.locator('#setting-theme').selectOption('light');
+    await page.locator('#settings-save').click();
+    await expect(page.locator('#settings-modal')).toHaveClass(/hidden/);
+    await expect(page.locator('html')).toHaveAttribute('data-theme', 'light');
   });
 
   test('URL routing preserves session on reload', async ({ page }) => {

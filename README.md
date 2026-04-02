@@ -21,21 +21,23 @@ Claude Journal reads your Claude Code session files (`~/.claude/projects`) and s
 npx claude-journal
 ```
 
-That's it. Opens at [http://localhost:8086](http://localhost:8086).
+That's it. Opens your browser automatically at [http://localhost:8086](http://localhost:8086).
+
+> **First time?** If you haven't used Claude Code yet, Claude Journal will show a welcome page with setup instructions. Start a conversation with `claude` first, then refresh.
 
 ## Installation
 
 ### One Command (recommended)
 
 ```bash
-npx claude-journal --open
+npx claude-journal
 ```
 
 ### Global Install
 
 ```bash
 npm install -g claude-journal
-claude-journal --open
+claude-journal
 ```
 
 ### From Source
@@ -54,9 +56,9 @@ docker build -t claude-journal .
 docker run -v ~/.claude/projects:/data -p 8086:8086 claude-journal
 ```
 
-### Desktop App (Linux)
+### Desktop App (Linux/macOS/Windows)
 
-Download the [AppImage](https://github.com/Arvid-pku/claude-journal/releases) and double-click. Sits in your system tray.
+Download the [AppImage / DMG / EXE](https://github.com/Arvid-pku/claude-journal/releases) from GitHub Releases. Sits in your system tray.
 
 ---
 
@@ -81,7 +83,7 @@ Annotate your conversations like a research paper.
 |---------|-------------|
 | **Favorites** | Star important messages. View all starred messages across sessions in the sidebar. |
 | **Highlights** | Color-highlight messages (yellow, green, blue, pink, purple). Browse all highlights in the sidebar. |
-| **Side Comments** | Google Docs-style comment cards on the right side of messages. Auto-save on blur. |
+| **Side Comments** | Google Docs-style comment cards on the right side of messages. Auto-save with visual "Saved" indicator. |
 | **Session Notes** | Freeform scratchpad per session in the notes panel. |
 | **Pin Sessions** | Pin important sessions to the top of the sidebar. |
 
@@ -116,7 +118,7 @@ Right-click any session for the context menu:
 - **Pin / Unpin** — keep important sessions at the top
 - **Rename** — inline editing, syncs to JSONL so `claude --resume <name>` works
 - **Duplicate** — create a copy of the session
-- **Move** — move between projects
+- **Move** — move between projects (with collision detection)
 - **Delete** — remove session and all associated data
 
 ### Sidebar (Claude.ai-inspired)
@@ -132,8 +134,11 @@ The sidebar mirrors Claude.ai's design:
 
 ### Keyboard Shortcuts
 
+Press `?` to see all shortcuts in-app.
+
 | Key | Action |
 |-----|--------|
+| `?` | Show keyboard shortcuts |
 | `/` | Global search |
 | `j` / `k` | Navigate between messages |
 | `n` / `p` | Jump between conversation turns |
@@ -160,6 +165,7 @@ Configurable via the gear icon:
 - **Tool calls** — expand by default, max output preview length
 - **Session sort** — newest, oldest, most messages, highest cost, alphabetical
 - **Auto-scroll** — on live update
+- **Projects directory** — custom path (validates on save, warns if restart needed)
 
 ### Export
 
@@ -168,9 +174,9 @@ Export any session as Markdown with one click (`Ctrl+E`). Includes favorites, no
 ### PWA Support
 
 Install as a Progressive Web App for a native-like experience:
-- Works offline (cached static assets)
+- Works offline (cached static assets + API responses)
 - Installable on desktop and mobile
-- API responses cached for offline viewing
+- Graceful CDN fallback — works behind firewalls or offline
 
 ---
 
@@ -182,10 +188,11 @@ claude-journal [options]
 Options:
   -p, --port <port>     Port (default: 8086, auto-increments if busy)
   -d, --dir <path>      Path to .claude/projects directory
-  -o, --open            Auto-open browser
+  -o, --open            Auto-open browser (default in interactive mode)
+  --no-open             Do not open browser
   --daemon              Run in background
   --stop                Stop background daemon
-  --status              Check daemon status
+  --status              Check daemon status (shows PID and URL)
   --auth <user:pass>    Enable HTTP basic auth
   -h, --help            Show help
 ```
@@ -193,14 +200,17 @@ Options:
 ### Examples
 
 ```bash
-# Basic
+# Basic (auto-opens browser)
 claude-journal
 
-# Background with auto-open
-claude-journal --daemon --open
+# Without auto-open
+claude-journal --no-open
 
-# Custom port with auth (for remote access)
-claude-journal --daemon --port 9000 --auth admin:secret
+# Background with custom port
+claude-journal --daemon --port 9000
+
+# With auth (for remote access)
+claude-journal --daemon --auth admin:secret
 
 # Check status / stop
 claude-journal --status
@@ -278,6 +288,50 @@ Claude Code stores conversation history as JSONL files in `~/.claude/projects/`.
 5. **Analytics** are computed on-the-fly from message usage data with cost estimation
 
 All file writes (edits, renames, deletes) use atomic write (temp file + rename) to prevent corruption from concurrent Claude Code access.
+
+---
+
+## Troubleshooting
+
+### "Port already in use"
+
+Claude Journal auto-tries the next 10 ports (8086–8095). If all are busy, specify a different port:
+```bash
+claude-journal --port 9000
+```
+
+### "Projects directory not found"
+
+Claude Journal looks for `~/.claude/projects` by default. If your projects are elsewhere:
+```bash
+claude-journal --dir /path/to/.claude/projects
+```
+Or change it in Settings (gear icon) inside the app.
+
+### "Node.js 18 or later required"
+
+Claude Journal requires Node.js 18+. Check your version with `node -v` and upgrade at [nodejs.org](https://nodejs.org).
+
+### macOS "damaged" app (Electron tray)
+
+Unsigned Electron apps are blocked by macOS Gatekeeper. Run:
+```bash
+xattr -cr "Claude Journal.app"
+```
+
+### Docker: no sessions visible
+
+Make sure you mount your Claude projects directory:
+```bash
+docker run -v ~/.claude/projects:/data -p 8086:8086 claude-journal
+```
+
+---
+
+## Requirements
+
+- **Node.js** 18 or later
+- **Claude Code** conversations in `~/.claude/projects/` (created automatically when you use Claude Code)
 
 ---
 

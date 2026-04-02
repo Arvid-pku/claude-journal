@@ -1,5 +1,5 @@
-const CACHE = 'claude-journal-v1';
-const STATIC = ['/', '/style.css', '/modules/main.js', '/modules/state.js', '/modules/sidebar.js', '/modules/messages.js', '/modules/rail.js', '/modules/toast.js', '/modules/router.js', '/modules/search.js', '/modules/analytics.js', '/manifest.json'];
+const CACHE = 'claude-journal-v2';
+const STATIC = ['/', '/style.css', '/modules/main.js', '/modules/state.js', '/modules/sidebar.js', '/modules/messages.js', '/modules/rail.js', '/modules/notes.js', '/modules/toast.js', '/modules/router.js', '/modules/search.js', '/modules/analytics.js', '/manifest.json'];
 
 self.addEventListener('install', e => {
   e.waitUntil(caches.open(CACHE).then(c => c.addAll(STATIC)));
