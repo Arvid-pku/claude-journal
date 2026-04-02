@@ -1,0 +1,7 @@
+node_modules
+annotations
+settings.json
+test-results
+tests
+*.png
+.git

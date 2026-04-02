@@ -17,7 +17,9 @@ const STATS_CACHE_PATH = path.join(ANNOTATIONS_DIR, '_stats_cache.json');
 fs.mkdirSync(ANNOTATIONS_DIR, { recursive: true });
 
 function loadSettings() {
-  const defaults = { projectsDir: '/hpc/home/xy200/.claude/projects', port: 8086, autoOpen: false };
+  const home = process.env.HOME || process.env.USERPROFILE || '';
+  const defaultDir = path.join(home, '.claude', 'projects');
+  const defaults = { projectsDir: defaultDir, port: 8086, autoOpen: false };
   if (fs.existsSync(SETTINGS_PATH)) {
     try { return { ...defaults, ...JSON.parse(fs.readFileSync(SETTINGS_PATH, 'utf8')) }; } catch {}
   }

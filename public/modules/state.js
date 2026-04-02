@@ -1,7 +1,7 @@
 // ── Shared state ────────────────────────────────────────────────────────
 
 export const DEFAULTS = {
-  projectsDir: '/hpc/home/xy200/.claude/projects',
+  projectsDir: '~/.claude/projects',
   port: 8086,
   autoOpen: false,
   fontSize: 'default',         // small | default | large
