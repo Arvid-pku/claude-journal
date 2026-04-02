@@ -609,11 +609,17 @@ kbd {
 
 /* Message bubble */
 .message {
-  max-width: 900px;
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  max-width: var(--msg-max-width, 900px);
   margin: 0 auto;
   padding: 0 32px;
   animation: fadeIn 200ms ease;
 }
+
+/* Widen messages when side comments exist to make room */
+#messages.has-comments .message { max-width: 1100px; }
 
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(6px); }
@@ -626,6 +632,8 @@ kbd {
 
 .message-inner {
   position: relative;
+  flex: 1;
+  min-width: 0;
   padding: 14px 18px;
   border-radius: var(--radius-lg);
   transition: background var(--transition);
@@ -1510,11 +1518,10 @@ mark.search-hit {
 /* ── Side Comments (Google Docs style) ─────────────────────────────────── */
 
 .msg-comment {
-  position: absolute;
-  right: -196px;
-  top: 8px;
   width: 180px;
+  flex-shrink: 0;
   padding: 8px 10px;
+  margin-top: 8px;
   background: var(--bg-surface);
   border: 1px solid var(--border);
   border-left: 3px solid var(--comment-color, var(--accent));
@@ -1523,7 +1530,7 @@ mark.search-hit {
   box-shadow: 0 1px 6px rgba(0,0,0,0.1);
   cursor: pointer;
   transition: all var(--transition);
-  z-index: 2;
+  align-self: flex-start;
 }
 
 .msg-comment:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.15); }
@@ -1544,28 +1551,11 @@ mark.search-hit {
   -webkit-box-orient: vertical;
 }
 
-/* When comments exist, shift messages left to make room */
-#messages.has-comments .message {
-  max-width: 700px;
-  margin-left: 32px;
-  margin-right: auto;
-}
-
-/* On narrow screens, show comments inline */
-@media (max-width: 1200px) {
-  .msg-comment {
-    position: relative;
-    right: auto;
-    top: auto;
-    width: 100%;
-    margin-top: 8px;
-    border-radius: 6px;
-    border-left-width: 3px;
-  }
-  #messages.has-comments .message {
-    max-width: var(--msg-max-width, 900px);
-    margin: 0 auto;
-  }
+/* On narrow screens, stack vertically */
+@media (max-width: 1000px) {
+  .message { flex-direction: column; }
+  .msg-comment { width: 100%; border-radius: 6px; }
+  #messages.has-comments .message { max-width: var(--msg-max-width, 900px); }
 }
 
 /* ── Session badge ─────────────────────────────────────────────────────── */

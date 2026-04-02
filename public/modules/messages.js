@@ -128,7 +128,11 @@ function createMessageEl(msg) {
     <button title="Copy" data-action="copy" data-uuid="${msg.uuid}">${IC.copy}</button>
     <button class="act-del" title="Delete message" data-action="delete" data-uuid="${msg.uuid}">${IC.trash}</button>`;
 
-  // Side comment (Google Docs style) for highlighted messages with color notes
+  inner.appendChild(header); inner.appendChild(body); inner.appendChild(actions);
+  div.appendChild(inner);
+
+  // Side comment (Google Docs style) — appended to .message (not .message-inner)
+  // so it sits alongside via flexbox, not clipped by overflow
   if (anno.highlight) {
     const colorNotes = state.annotations._meta?.colorNotes || {};
     const note = colorNotes[anno.highlight];
@@ -138,18 +142,13 @@ function createMessageEl(msg) {
       comment.style.setProperty('--comment-color', anno.highlight);
       comment.innerHTML = `<div class="comment-title">${escapeHtml(note.title || 'Note')}</div>${note.text ? `<div class="comment-text">${escapeHtml(truncateText(note.text, 120))}</div>` : ''}`;
       comment.addEventListener('click', () => {
-        const panel = document.getElementById('notes-panel');
-        if (panel.classList.contains('hidden')) {
-          const { toggleNotesPanel } = window.__notesPanel || {};
-          if (toggleNotesPanel) toggleNotesPanel();
-        }
+        const { toggleNotesPanel } = window.__notesPanel || {};
+        if (toggleNotesPanel) toggleNotesPanel();
       });
-      inner.appendChild(comment);
+      div.appendChild(comment);
     }
   }
 
-  inner.appendChild(header); inner.appendChild(body); inner.appendChild(actions);
-  div.appendChild(inner);
   return div;
 }
 
