@@ -935,22 +935,7 @@ kbd {
 
 .thinking-content.expanded { display: block; }
 
-/* ── Note display ──────────────────────────────────────────────────────── */
-
-.msg-note {
-  margin-top: 8px;
-  padding: 6px 10px;
-  background: var(--yellow-dim);
-  border: 1px solid color-mix(in srgb, var(--yellow) 20%, transparent);
-  border-radius: 6px;
-  font-size: 12px;
-  color: var(--yellow);
-  display: flex;
-  align-items: flex-start;
-  gap: 6px;
-}
-
-.msg-note-icon { flex-shrink: 0; }
+/* (old msg-note removed — unified into side comments) */
 
 /* ── Token usage ───────────────────────────────────────────────────────── */
 
@@ -1518,38 +1503,55 @@ mark.search-hit {
 /* ── Side Comments (Google Docs style) ─────────────────────────────────── */
 
 .msg-comment {
-  width: 180px;
+  width: 200px;
   flex-shrink: 0;
-  padding: 8px 10px;
   margin-top: 8px;
   background: var(--bg-surface);
   border: 1px solid var(--border);
   border-left: 3px solid var(--comment-color, var(--accent));
   border-radius: 0 6px 6px 0;
-  font-size: 11px;
-  box-shadow: 0 1px 6px rgba(0,0,0,0.1);
-  cursor: pointer;
-  transition: all var(--transition);
+  box-shadow: 0 1px 6px rgba(0,0,0,0.08);
   align-self: flex-start;
+  position: relative;
 }
 
-.msg-comment:hover { box-shadow: 0 2px 12px rgba(0,0,0,0.15); }
-
-.comment-title {
-  font-weight: 600;
-  font-size: 11px;
-  color: var(--comment-color, var(--accent));
-  margin-bottom: 2px;
+.comment-input {
+  width: 100%;
+  min-height: 48px;
+  padding: 8px 24px 8px 10px;
+  background: transparent;
+  border: none;
+  outline: none;
+  font-family: var(--font-sans);
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-primary);
+  resize: vertical;
 }
 
-.comment-text {
-  color: var(--text-secondary);
-  line-height: 1.4;
-  overflow: hidden;
-  display: -webkit-box;
-  -webkit-line-clamp: 3;
-  -webkit-box-orient: vertical;
+.comment-input::placeholder { color: var(--text-muted); }
+.comment-input:focus { background: var(--bg-elevated); }
+
+.comment-delete {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 18px;
+  height: 18px;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: 14px;
+  cursor: pointer;
+  border-radius: 3px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  line-height: 1;
 }
+
+.msg-comment:hover .comment-delete { display: flex; }
+.comment-delete:hover { background: var(--red-dim); color: var(--red); }
 
 /* On narrow screens, stack vertically */
 @media (max-width: 1000px) {
@@ -1722,6 +1724,42 @@ mark.search-hit {
 
 .color-note-link:hover { background: var(--bg-hover); }
 .color-note-link + .color-note-link { border-top: 1px solid var(--border); }
+
+/* Note items in notes panel */
+.note-item {
+  padding: 8px 0;
+  cursor: pointer;
+  transition: opacity var(--transition);
+}
+
+.note-item:hover { opacity: 0.8; }
+.note-item + .note-item { border-top: 1px solid var(--border); }
+
+.note-item-header {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+  margin-bottom: 3px;
+}
+
+.note-item-role {
+  font-size: 9px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.note-item-role.user { color: var(--green); }
+.note-item-role.assistant { color: var(--accent); }
+.note-item-excerpt { font-size: 11px; color: var(--text-muted); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.note-item-text {
+  font-size: 12px;
+  color: var(--text-secondary);
+  line-height: 1.4;
+  padding-left: 8px;
+  border-left: 2px solid var(--accent);
+}
 
 .link-role {
   font-weight: 600;

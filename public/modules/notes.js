@@ -1,9 +1,4 @@
-import { state, api, apiPost, escapeHtml, truncateText, renderMarkdown } from './state.js';
-
-const COLOR_NAMES = {
-  '#fbbf24': 'Yellow', '#34d399': 'Green', '#60a5fa': 'Blue',
-  '#f472b6': 'Pink', '#a78bfa': 'Purple',
-};
+import { state, api, apiPost, escapeHtml, truncateText } from './state.js';
 
 let saveTimer = null;
 
@@ -20,16 +15,17 @@ export function renderNotesPanel() {
   const meta = state.annotations._meta || {};
   const sessionNote = meta.sessionNote || '';
 
-  // Find all colors used in highlights
-  const colorGroups = {};
+  // Collect all messages with comments
+  const comments = [];
   for (const [uuid, anno] of Object.entries(state.annotations)) {
-    if (uuid === '_meta' || !anno.highlight) continue;
-    const c = anno.highlight;
-    if (!colorGroups[c]) colorGroups[c] = [];
-    colorGroups[c].push(uuid);
+    if (uuid === '_meta') continue;
+    const text = anno.comment || anno.note;
+    if (!text) continue;
+    const msg = state.displayMessages.find(m => m.uuid === uuid);
+    if (!msg) continue;
+    const excerpt = msg.role === 'user' ? msg.content : (msg.parts?.find(p => p.type === 'text')?.content || '');
+    comments.push({ uuid, text, excerpt, role: msg.role, highlight: anno.highlight });
   }
-
-  const colorNotes = meta.colorNotes || {};
 
   let html = `
     <div class="notes-header">
@@ -44,36 +40,17 @@ export function renderNotesPanel() {
         <textarea class="notes-textarea" id="session-note-input" placeholder="Write session notes here...">${escapeHtml(sessionNote)}</textarea>
       </div>`;
 
-  // Color note groups
-  const colors = Object.keys({ ...colorGroups, ...colorNotes }).filter((v, i, a) => a.indexOf(v) === i);
-  if (colors.length) {
-    html += '<div class="notes-section"><label class="notes-label">Highlights</label>';
-    for (const color of colors) {
-      const name = COLOR_NAMES[color] || color;
-      const note = colorNotes[color] || {};
-      const uuids = colorGroups[color] || [];
-      const isOpen = note._open ? 'open' : '';
-
+  if (comments.length) {
+    html += `<div class="notes-section"><label class="notes-label">Comments (${comments.length})</label>`;
+    for (const c of comments) {
+      const color = c.highlight || 'var(--accent)';
       html += `
-        <div class="color-note" data-color="${color}">
-          <div class="color-note-header" data-color="${color}">
-            <span class="color-note-dot" style="background:${color}"></span>
-            <input class="color-note-title" value="${escapeHtml(note.title || name)}" placeholder="Note title..." data-color="${color}" data-field="title">
-            <span class="color-note-count">${uuids.length}</span>
-            <button class="color-note-toggle" data-color="${color}">${uuids.length ? '&#9654;' : ''}</button>
+        <div class="note-item" data-uuid="${c.uuid}">
+          <div class="note-item-header">
+            <span class="note-item-role ${c.role}">${c.role === 'user' ? 'You' : 'Claude'}</span>
+            <span class="note-item-excerpt">${escapeHtml(truncateText(c.excerpt, 50))}</span>
           </div>
-          <textarea class="color-note-text" placeholder="Add note..." data-color="${color}" data-field="text">${escapeHtml(note.text || '')}</textarea>
-          <div class="color-note-links ${isOpen ? '' : 'hidden'}" data-color="${color}">
-            ${uuids.map(uuid => {
-              const msg = state.displayMessages.find(m => m.uuid === uuid);
-              if (!msg) return '';
-              const excerpt = msg.role === 'user' ? msg.content : (msg.parts?.find(p => p.type === 'text')?.content || '');
-              return `<div class="color-note-link" data-uuid="${uuid}" title="Click to scroll">
-                <span class="link-role">${msg.role === 'user' ? 'You' : 'Claude'}</span>
-                <span class="link-text">${escapeHtml(truncateText(excerpt, 80))}</span>
-              </div>`;
-            }).join('')}
-          </div>
+          <div class="note-item-text" style="border-left-color:${color}">${escapeHtml(c.text)}</div>
         </div>`;
     }
     html += '</div>';
@@ -82,26 +59,14 @@ export function renderNotesPanel() {
   html += '</div>';
   panel.innerHTML = html;
 
-  // Event handlers
+  // Wire events
   const noteInput = document.getElementById('session-note-input');
-  if (noteInput) noteInput.addEventListener('input', () => debounceSave('sessionNote', noteInput.value));
-
-  panel.querySelectorAll('.color-note-title').forEach(el => {
-    el.addEventListener('input', () => saveColorNote(el.dataset.color, 'title', el.value));
+  if (noteInput) noteInput.addEventListener('input', () => {
+    clearTimeout(saveTimer);
+    saveTimer = setTimeout(() => saveSessionNote(noteInput.value), 500);
   });
 
-  panel.querySelectorAll('.color-note-text').forEach(el => {
-    el.addEventListener('input', () => saveColorNote(el.dataset.color, 'text', el.value));
-  });
-
-  panel.querySelectorAll('.color-note-toggle').forEach(el => {
-    el.addEventListener('click', () => {
-      const links = panel.querySelector(`.color-note-links[data-color="${el.dataset.color}"]`);
-      if (links) { links.classList.toggle('hidden'); el.innerHTML = links.classList.contains('hidden') ? '&#9654;' : '&#9660;'; }
-    });
-  });
-
-  panel.querySelectorAll('.color-note-link').forEach(el => {
+  panel.querySelectorAll('.note-item').forEach(el => {
     el.addEventListener('click', () => {
       const target = document.querySelector(`.message[data-uuid="${el.dataset.uuid}"]`);
       if (target) { target.scrollIntoView({ behavior: 'smooth', block: 'center' }); target.querySelector('.message-inner')?.classList.add('flash'); }
@@ -109,31 +74,11 @@ export function renderNotesPanel() {
   });
 }
 
-function debounceSave(field, value) {
-  clearTimeout(saveTimer);
-  saveTimer = setTimeout(() => saveMetaField(field, value), 500);
-}
-
-async function saveMetaField(field, value) {
-  const meta = state.annotations._meta || {};
-  meta[field] = value;
+async function saveSessionNote(value) {
   await apiPost(
     `/api/annotations/${encodeURIComponent(state.currentProject)}/${encodeURIComponent(state.currentSession)}`,
-    { uuid: '_meta', key: field, value: value || false }
+    { uuid: '_meta', key: 'sessionNote', value: value || false }
   );
   if (!state.annotations._meta) state.annotations._meta = {};
-  state.annotations._meta[field] = value;
-}
-
-async function saveColorNote(color, field, value) {
-  const meta = state.annotations._meta || {};
-  const colorNotes = meta.colorNotes || {};
-  if (!colorNotes[color]) colorNotes[color] = {};
-  colorNotes[color][field] = value;
-  await apiPost(
-    `/api/annotations/${encodeURIComponent(state.currentProject)}/${encodeURIComponent(state.currentSession)}`,
-    { uuid: '_meta', key: 'colorNotes', value: colorNotes }
-  );
-  if (!state.annotations._meta) state.annotations._meta = {};
-  state.annotations._meta.colorNotes = colorNotes;
+  state.annotations._meta.sessionNote = value;
 }

@@ -115,15 +115,14 @@ function createMessageEl(msg) {
     body.appendChild(u);
   }
 
-  if (anno.note) { const n = document.createElement('div'); n.className = 'msg-note'; n.innerHTML = `<span class="msg-note-icon">&#128221;</span><span>${escapeHtml(anno.note)}</span>`; body.appendChild(n); }
-
   // Actions
   const actions = document.createElement('div');
   actions.className = 'msg-actions';
+  const hasComment = !!(anno.comment || anno.note);
   actions.innerHTML = `
     <button class="act-fav ${anno.favorite ? 'active' : ''}" title="Favorite" data-action="favorite" data-uuid="${msg.uuid}">${IC.star}</button>
     <button title="Highlight" data-action="highlight" data-uuid="${msg.uuid}">${IC.highlight}</button>
-    <button title="Note" data-action="note" data-uuid="${msg.uuid}">${IC.note}</button>
+    <button class="${hasComment ? 'active' : ''}" title="Comment" data-action="comment" data-uuid="${msg.uuid}">${IC.note}</button>
     <button title="Edit" data-action="edit" data-uuid="${msg.uuid}">${IC.edit}</button>
     <button title="Copy" data-action="copy" data-uuid="${msg.uuid}">${IC.copy}</button>
     <button class="act-del" title="Delete message" data-action="delete" data-uuid="${msg.uuid}">${IC.trash}</button>`;
@@ -131,22 +130,14 @@ function createMessageEl(msg) {
   inner.appendChild(header); inner.appendChild(body); inner.appendChild(actions);
   div.appendChild(inner);
 
-  // Side comment (Google Docs style) — appended to .message (not .message-inner)
-  // so it sits alongside via flexbox, not clipped by overflow
-  if (anno.highlight) {
-    const colorNotes = state.annotations._meta?.colorNotes || {};
-    const note = colorNotes[anno.highlight];
-    if (note && (note.title || note.text)) {
-      const comment = document.createElement('div');
-      comment.className = 'msg-comment';
-      comment.style.setProperty('--comment-color', anno.highlight);
-      comment.innerHTML = `<div class="comment-title">${escapeHtml(note.title || 'Note')}</div>${note.text ? `<div class="comment-text">${escapeHtml(truncateText(note.text, 120))}</div>` : ''}`;
-      comment.addEventListener('click', () => {
-        const { toggleNotesPanel } = window.__notesPanel || {};
-        if (toggleNotesPanel) toggleNotesPanel();
-      });
-      div.appendChild(comment);
-    }
+  // Side comment (Google Docs style) — one unified system
+  const commentText = anno.comment || anno.note || '';
+  if (commentText) {
+    const comment = document.createElement('div');
+    comment.className = 'msg-comment';
+    if (anno.highlight) comment.style.setProperty('--comment-color', anno.highlight);
+    comment.innerHTML = `<textarea class="comment-input" data-uuid="${msg.uuid}">${escapeHtml(commentText)}</textarea><button class="comment-delete" data-action="delete-comment" data-uuid="${msg.uuid}" title="Remove">&times;</button>`;
+    div.appendChild(comment);
   }
 
   return div;

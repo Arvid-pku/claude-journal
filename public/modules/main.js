@@ -331,7 +331,24 @@ function setupEvents() {
         picker.style.top = `${rect.bottom + 4}px`; picker.style.left = `${rect.left}px`;
         picker.classList.remove('hidden'); picker.dataset.uuid = uuid; break;
       }
-      case 'note': state.noteTarget = uuid; document.getElementById('note-text').value = state.annotations[uuid]?.note || ''; showModal('note-modal'); document.getElementById('note-text').focus(); break;
+      case 'comment': {
+        const msgEl = document.querySelector(`.message[data-uuid="${uuid}"]`);
+        if (!msgEl) break;
+        let card = msgEl.querySelector('.msg-comment');
+        if (!card) {
+          card = document.createElement('div');
+          card.className = 'msg-comment';
+          const anno = state.annotations[uuid] || {};
+          if (anno.highlight) card.style.setProperty('--comment-color', anno.highlight);
+          card.innerHTML = `<textarea class="comment-input" data-uuid="${uuid}" placeholder="Add comment..."></textarea><button class="comment-delete" data-action="delete-comment" data-uuid="${uuid}" title="Remove">&times;</button>`;
+          msgEl.appendChild(card);
+          // Update has-comments class
+          document.getElementById('messages').classList.add('has-comments');
+        }
+        card.classList.remove('hidden');
+        card.querySelector('.comment-input').focus();
+        break;
+      }
       case 'edit': startEditing(uuid); break;
       case 'copy': {
         const msg = state.displayMessages.find(m => m.uuid === uuid);
@@ -362,9 +379,38 @@ function setupEvents() {
     document.getElementById('highlight-picker').classList.add('hidden');
   });
 
-  // Note save
-  document.getElementById('note-save').addEventListener('click', () => {
-    if (state.noteTarget) setAnnotation(state.noteTarget, 'note', document.getElementById('note-text').value.trim() || false);
+  // Comment auto-save on blur
+  document.getElementById('messages').addEventListener('focusout', (e) => {
+    if (!e.target.classList.contains('comment-input')) return;
+    const uuid = e.target.dataset.uuid;
+    const text = e.target.value.trim();
+    if (text) {
+      setAnnotation(uuid, 'comment', text);
+      // Also migrate old 'note' key to 'comment'
+      if (state.annotations[uuid]?.note) setAnnotation(uuid, 'note', false);
+    } else {
+      setAnnotation(uuid, 'comment', false);
+      e.target.closest('.msg-comment')?.remove();
+      // Check if any comments remain
+      if (!document.querySelector('#messages .msg-comment')) document.getElementById('messages').classList.remove('has-comments');
+    }
+  });
+
+  // Delete comment
+  document.getElementById('messages').addEventListener('click', async (e) => {
+    const btn = e.target.closest('[data-action="delete-comment"]');
+    if (!btn) return;
+    e.stopPropagation();
+    const uuid = btn.dataset.uuid;
+    await setAnnotation(uuid, 'comment', false);
+    if (state.annotations[uuid]?.note) await setAnnotation(uuid, 'note', false);
+    btn.closest('.msg-comment')?.remove();
+    if (!document.querySelector('#messages .msg-comment')) document.getElementById('messages').classList.remove('has-comments');
+  });
+
+  // Session note save (in notes panel)
+  document.getElementById('note-save')?.addEventListener('click', () => {
+    if (state.noteTarget) setAnnotation(state.noteTarget, 'comment', document.getElementById('note-text').value.trim() || false);
     hideModal('note-modal'); state.noteTarget = null;
   });
 
