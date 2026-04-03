@@ -1,4 +1,4 @@
-import { state, api, formatNum, formatCost, escapeHtml, shortenPath } from './state.js';
+import { state, api, formatNum, formatCost, escapeHtml, shortenPath, shortToolName } from './state.js';
 import { navigate } from './router.js';
 
 let currentFrom = '', currentTo = '';
@@ -193,12 +193,6 @@ function renderToolUsage(data) {
   if (!tools.length) return '';
   const maxCount = tools[0][1].count;
 
-  function shortToolName(n) {
-    // Strip MCP prefixes like mcp__plugin_playwright_playwright__
-    if (n.startsWith('mcp__')) { const parts = n.split('__'); return parts[parts.length - 1]; }
-    return n;
-  }
-
   return `
     <div class="analytics-section">
       <h3>Tool Usage</h3>
@@ -284,7 +278,7 @@ function renderProjectDashboard(data, projectId) {
           <div class="dash-tool-list">
             ${toolEntries.map(([name, d]) => `
               <div class="dash-tool-row">
-                <span class="dash-tool-name">${escapeHtml(name)}</span>
+                <span class="dash-tool-name" title="${escapeHtml(name)}">${escapeHtml(shortToolName(name))}</span>
                 <div class="dash-tool-bar"><div style="width:${Math.round(d.count / maxToolCount * 100)}%"></div></div>
                 <span class="dash-tool-count">${d.count}</span>
               </div>`).join('')}

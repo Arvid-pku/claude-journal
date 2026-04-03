@@ -6,6 +6,7 @@ const path = require('path');
 const crypto = require('crypto');
 const { exec } = require('child_process');
 const chokidar = require('chokidar');
+const codex = require('./providers/codex');
 
 // ── Config ──────────────────────────────────────────────────────────────────
 
@@ -231,9 +232,17 @@ app.get('/api/projects', (_req, res) => {
       })
       .filter(p => p.sessionCount > 0)
       .sort((a, b) => a.projectPath.localeCompare(b.projectPath));
+    // Merge Codex projects
+    if (codex.isAvailable()) {
+      try {
+        const codexProjects = codex.listProjects();
+        for (const cp of codexProjects) projects.push(cp);
+      } catch {}
+    }
+
     if (!projects.length) {
       return res.json({ empty: true, dir: PROJECTS_DIR, reason: 'no_sessions',
-        message: `No Claude Code sessions found in ${PROJECTS_DIR}. Start a conversation with Claude Code to create one.` });
+        message: `No Claude Code sessions found in ${PROJECTS_DIR}. Start a conversation with Claude Code or Codex to create one.` });
     }
     res.json(projects);
   } catch (err) { res.status(500).json({ error: err.message }); }
@@ -242,6 +251,24 @@ app.get('/api/projects', (_req, res) => {
 // ── Sessions ────────────────────────────────────────────────────────────────
 
 app.get('/api/sessions/:project', (req, res) => {
+  // Codex provider
+  if (req.params.project.startsWith('codex__')) {
+    try {
+      const sessions = codex.listSessions(req.params.project);
+      const names = loadNames();
+      const pins = loadPins();
+      for (const s of sessions) {
+        const nameKey = `${req.params.project}__${s.sessionId}`;
+        if (names[nameKey]) s.customName = names[nameKey];
+        s.pinned = !!pins[nameKey];
+        const stats = codex.getSessionStats(s.sessionId);
+        if (stats) Object.assign(s, stats);
+        s.hasAnnotations = fs.existsSync(path.join(ANNOTATIONS_DIR, `${req.params.project}__${s.sessionId}.json`));
+      }
+      return res.json(sessions);
+    } catch (err) { return res.status(500).json({ error: err.message }); }
+  }
+
   try {
     const projectDir = path.join(PROJECTS_DIR, req.params.project);
     const indexPath = path.join(projectDir, 'sessions-index.json');
@@ -299,6 +326,15 @@ app.get('/api/sessions/:project', (req, res) => {
 // ── Messages ────────────────────────────────────────────────────────────────
 
 app.get('/api/messages/:project/:session', (req, res) => {
+  // Codex provider
+  if (req.params.project.startsWith('codex__')) {
+    try {
+      const msgs = codex.parseMessages(req.params.session);
+      if (!msgs) return res.status(404).json({ error: 'Not found' });
+      return res.json(msgs);
+    } catch (err) { return res.status(500).json({ error: err.message }); }
+  }
+
   try {
     const fp = path.join(PROJECTS_DIR, req.params.project, `${req.params.session}.jsonl`);
     if (!fs.existsSync(fp)) return res.status(404).json({ error: 'Not found' });
@@ -507,6 +543,62 @@ app.get('/api/analytics', (req, res) => {
         } catch {}
         if (sCost > 0) topSessions.push({ name: sName, cost: Math.round(sCost * 100) / 100, msgs: sMsgs });
         if (sMsgs > longestSession) longestSession = sMsgs;
+      }
+    }
+
+    // Include Codex sessions in analytics
+    if (codex.isAvailable()) {
+      const codexProjects = codex.listProjects();
+      const targetProjects = filterProject
+        ? codexProjects.filter(p => p.id === filterProject)
+        : codexProjects;
+      for (const cp of targetProjects) {
+        const sessions = codex.listSessions(cp.id);
+        sessionCount += sessions.length;
+        for (const s of sessions) {
+          try {
+            const msgs = codex.parseMessages(s.sessionId);
+            if (!msgs) continue;
+            let sCost = 0, sMsgs = 0;
+            const sName = s.summary?.slice(0, 40) || s.sessionId.slice(0, 8);
+            for (const m of msgs) {
+              if (m.timestamp) {
+                const day = m.timestamp.slice(0, 10);
+                if (dateFrom && day < dateFrom) continue;
+                if (dateTo && day > dateTo) continue;
+              }
+              if (m.timestamp && (m.type === 'user' || m.type === 'assistant')) {
+                const dt = new Date(m.timestamp);
+                const key = `${dt.getDay()}-${dt.getHours()}`;
+                byHour[key] = (byHour[key] || 0) + 1;
+              }
+              if (m.type === 'user' && m.message?.role === 'user') totalUserMsgs++;
+              if (m.type !== 'assistant' || !m.message?.content || !Array.isArray(m.message.content)) continue;
+              for (const b of m.message.content) {
+                if (b.type === 'tool_use') {
+                  const name = b.name || 'unknown';
+                  if (!byTool[name]) byTool[name] = { count: 0, cost: 0 };
+                  byTool[name].count++;
+                  totalToolCalls++;
+                }
+              }
+              if (m.message.usage) {
+                const u = m.message.usage, model = m.message.model || 'codex';
+                const cost = messageCost(model, u);
+                const day = (m.timestamp || '').slice(0, 10) || 'unknown';
+                const inp = u.input_tokens || 0, out = u.output_tokens || 0;
+                if (!byDay[day]) byDay[day] = { cost: 0, input: 0, output: 0, msgs: 0 };
+                byDay[day].cost += cost; byDay[day].input += inp; byDay[day].output += out; byDay[day].msgs++;
+                if (!byModel[model]) byModel[model] = { cost: 0, tokens: 0, msgs: 0 };
+                byModel[model].cost += cost; byModel[model].tokens += inp + out; byModel[model].msgs++;
+                totalCost += cost; totalInput += inp; totalOutput += out; totalMsgs++;
+                sCost += cost; sMsgs++;
+              }
+            }
+            if (sMsgs > 0) topSessions.push({ name: sName, cost: Math.round(sCost * 100) / 100, msgs: sMsgs });
+            if (sMsgs > longestSession) longestSession = sMsgs;
+          } catch {}
+        }
       }
     }
 
@@ -856,13 +948,24 @@ wss.on('connection', (ws) => {
     let msg; try { msg = JSON.parse(raw); } catch { return; }
     if (msg.type === 'watch') {
       if (watcher) { watcher.close(); watcher = null; }
-      const fp = path.join(PROJECTS_DIR, msg.project, `${msg.session}.jsonl`);
-      if (!fs.existsSync(fp)) return;
+      // Resolve file path — Codex or Claude
+      let fp;
+      if (msg.project?.startsWith('codex__')) {
+        fp = codex.getSessionFilePath(msg.session);
+      } else {
+        fp = path.join(PROJECTS_DIR, msg.project, `${msg.session}.jsonl`);
+      }
+      if (!fp || !fs.existsSync(fp)) return;
       watcher = chokidar.watch(fp, { usePolling: true, interval: 1500, awaitWriteFinish: { stabilityThreshold: 500, pollInterval: 200 } });
       watcher.on('change', () => {
         try {
-          const msgs = fs.readFileSync(fp, 'utf8').split('\n').filter(Boolean).map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
-          if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'update', messages: msgs }));
+          let msgs;
+          if (msg.project?.startsWith('codex__')) {
+            msgs = codex.parseMessages(msg.session);
+          } else {
+            msgs = fs.readFileSync(fp, 'utf8').split('\n').filter(Boolean).map(l => { try { return JSON.parse(l); } catch { return null; } }).filter(Boolean);
+          }
+          if (msgs && ws.readyState === 1) ws.send(JSON.stringify({ type: 'update', messages: msgs }));
         } catch {}
       });
     }

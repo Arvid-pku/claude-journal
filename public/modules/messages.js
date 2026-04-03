@@ -1,5 +1,5 @@
 import { state, api, apiPut, IC, afterRender, onAnnotationChange,
-  escapeHtml, formatTime, formatDate, formatNum, formatCost, renderMarkdown, truncate, truncateText, computeLineDiff } from './state.js';
+  escapeHtml, formatTime, formatDate, formatNum, formatCost, renderMarkdown, truncate, truncateText, shortToolName, computeLineDiff } from './state.js';
 
 // ── Process raw JSONL into display messages ─────────────────────────────
 
@@ -37,7 +37,7 @@ export function processMessages(raw) {
           if (!(t.length > 20 && /^[A-Za-z0-9+/=\s]+$/.test(t) && t.length > 200)) parts.push({ type: 'thinking', content: t });
         }
       }
-      if (parts.length) display.push({ uuid: m.uuid, role: 'assistant', parts, timestamp: m.timestamp, model: msg.model, usage: msg.usage });
+      if (parts.length) display.push({ uuid: m.uuid, role: 'assistant', parts, timestamp: m.timestamp, model: msg.model, usage: msg.usage, provider: msg.provider });
     }
   }
   return display;
@@ -106,7 +106,7 @@ function createMessageEl(msg) {
   if (state.settings.showAvatars) {
     const avatar = document.createElement('span');
     avatar.className = `msg-avatar ${msg.role}`;
-    avatar.textContent = msg.role === 'user' ? 'Y' : 'C';
+    avatar.textContent = msg.role === 'user' ? 'Y' : (msg.provider === 'codex' ? 'X' : 'C');
     inner.appendChild(avatar);
   }
 
@@ -123,7 +123,8 @@ function createMessageEl(msg) {
   }
   const timeHtml = state.settings.showTimestamps ? `<span class="msg-time">${formatTime(msg.timestamp)}</span>` : '';
   const collapseIcon = state.settings.enableCollapse ? '<span class="collapse-icon">&#9654;</span>' : '';
-  header.innerHTML = `${collapseIcon}<span class="msg-role">${msg.role === 'user' ? 'You' : 'Claude'}</span>${msg.model ? `<span class="msg-model">${msg.model}</span>` : ''}${state.settings.showCost ? costHtml : ''}${timeHtml}`;
+  const roleName = msg.role === 'user' ? 'You' : (msg.provider === 'codex' ? 'Codex' : 'Claude');
+  header.innerHTML = `${collapseIcon}<span class="msg-role">${roleName}</span>${msg.model ? `<span class="msg-model">${msg.model}</span>` : ''}${state.settings.showCost ? costHtml : ''}${timeHtml}`;
 
   // Feature 2: Collapse
   if (state.settings.enableCollapse) {
@@ -594,7 +595,7 @@ function createTimelineSummary(msgs) {
       <span>${userCount} prompts</span><span>${assistCount} responses</span><span>${totalTools} tool calls</span>
     </div>
     ${topTools.length ? `<div class="timeline-tools">${topTools.map(([name, count]) =>
-      `<div class="timeline-tool"><span class="timeline-tool-name">${escapeHtml(name)}</span><div class="timeline-tool-bar"><div style="width:${Math.round(count/maxCount*100)}%"></div></div><span class="timeline-tool-count">${count}</span></div>`
+      `<div class="timeline-tool"><span class="timeline-tool-name" title="${escapeHtml(name)}">${escapeHtml(shortToolName(name))}</span><div class="timeline-tool-bar"><div style="width:${Math.round(count/maxCount*100)}%"></div></div><span class="timeline-tool-count">${count}</span></div>`
     ).join('')}</div>` : ''}
     ${files.size ? `<div class="timeline-files">${[...files].slice(0, 12).map(f => `<span class="timeline-file-pill">${escapeHtml(f)}</span>`).join('')}${files.size > 12 ? `<span class="timeline-file-pill">+${files.size - 12} more</span>` : ''}</div>` : ''}`;
   el.querySelector('.timeline-close').addEventListener('click', () => el.remove());
@@ -624,9 +625,9 @@ export function startEditing(uuid) {
   if (!el) return;
   const body = el.querySelector('.msg-body');
 
-  let currentText = '', partIndex = 0;
+  let currentText = '';
   if (msg.role === 'user') { currentText = msg.content; }
-  else { for (let i = 0; i < msg.parts.length; i++) { if (msg.parts[i].type === 'text') { currentText = msg.parts[i].content; break; } } }
+  else { for (const p of msg.parts) { if (p.type === 'text') { currentText = p.content; break; } } }
 
   body.innerHTML = '';
   const textarea = document.createElement('textarea');
@@ -652,7 +653,7 @@ export function startEditing(uuid) {
     saveBtn.textContent = 'Saving...'; saveBtn.disabled = true;
     try {
       const reqBody = { content: textarea.value };
-      if (msg.role !== 'user') reqBody.partIndex = partIndex;
+      if (msg.role !== 'user') reqBody.partIndex = 0;
       await apiPut(`/api/messages/${encodeURIComponent(state.currentProject)}/${encodeURIComponent(state.currentSession)}/${encodeURIComponent(uuid)}`, reqBody);
       if (msg.role === 'user') msg.content = textarea.value;
       else { for (const p of msg.parts) { if (p.type === 'text') { p.content = textarea.value; break; } } }

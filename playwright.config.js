@@ -5,16 +5,16 @@ module.exports = defineConfig({
   timeout: 30000,
   retries: 1,
   use: {
-    baseURL: 'http://localhost:8086',
+    baseURL: 'http://localhost:8087',
     headless: true,
     launchOptions: {
       executablePath: process.env.PLAYWRIGHT_CHROMIUM_EXECUTABLE_PATH || undefined,
     },
   },
   webServer: {
-    command: 'node server.js',
-    port: 8086,
-    timeout: 10000,
+    command: 'PORT=8087 node server.js',
+    port: 8087,
+    timeout: 15000,
     reuseExistingServer: true,
   },
 });

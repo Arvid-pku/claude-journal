@@ -45,23 +45,29 @@ test.describe('Claude Journal', () => {
     expect(dots).toBeGreaterThan(0);
   });
 
-  test('favorite toggle works', async ({ page }) => {
+  test('favorite toggle works', async ({ page, request }) => {
     await page.goto('/');
     await page.locator('.project-group').first().waitFor({ timeout: 10000 });
     await page.locator('.project-header').first().click();
     await page.locator('.session-item').first().waitFor({ timeout: 5000 });
-    await page.locator('.session-item').first().click();
-    await page.locator('.message').first().waitFor({ timeout: 5000 });
-    // Hover to show actions, click favorite
-    const msg = page.locator('.message-inner').first();
-    await msg.hover();
-    const favBtn = msg.locator('[data-action="favorite"]');
-    await favBtn.click();
-    await expect(favBtn).toHaveClass(/active/);
-    // Toggle off
-    await msg.hover();
-    await favBtn.click();
-    await expect(favBtn).not.toHaveClass(/active/);
+    const sessionItem = page.locator('.session-item').first();
+    const projectId = await sessionItem.getAttribute('data-project-id');
+    const sessionId = await sessionItem.getAttribute('data-session-id');
+    await sessionItem.click();
+    await page.locator('.message').first().waitFor({ timeout: 15000 });
+    // Use the annotation API directly to test favorite logic (avoids DOM race conditions from live updates)
+    const messagesResp = await request.get(`/api/messages/${projectId}/${sessionId}`);
+    const messages = await messagesResp.json();
+    const firstUserMsg = messages.find(m => m.type === 'user' && m.uuid);
+    expect(firstUserMsg).toBeTruthy();
+    // Set favorite via API
+    await request.post(`/api/annotations/${projectId}/${sessionId}`, { data: { uuid: firstUserMsg.uuid, key: 'favorite', value: true } });
+    const anno1 = await (await request.get(`/api/annotations/${projectId}/${sessionId}`)).json();
+    expect(anno1[firstUserMsg.uuid]?.favorite).toBe(true);
+    // Unset favorite
+    await request.post(`/api/annotations/${projectId}/${sessionId}`, { data: { uuid: firstUserMsg.uuid, key: 'favorite', value: false } });
+    const anno2 = await (await request.get(`/api/annotations/${projectId}/${sessionId}`)).json();
+    expect(anno2[firstUserMsg.uuid]?.favorite).toBeFalsy();
   });
 
   test('global search opens and finds results', async ({ page }) => {

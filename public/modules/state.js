@@ -30,6 +30,7 @@ export const DEFAULTS = {
   advancedSearch: true,
   enableBulkOps: false,
   enableProjectDashboard: true,
+  providerFilter: 'all',        // all | claude | codex
 };
 
 export const state = {
@@ -158,6 +159,11 @@ export function shortenPath(p) {
   if (!p) return 'Unknown';
   const parts = p.replace(/^\/+/, '').split('/');
   return parts.length <= 3 ? parts.join('/') : '.../' + parts.slice(-3).join('/');
+}
+
+export function shortToolName(n) {
+  if (n.startsWith('mcp__')) { const parts = n.split('__'); return parts[parts.length - 1]; }
+  return n;
 }
 
 export function showModal(id) { document.getElementById(id).classList.remove('hidden'); }

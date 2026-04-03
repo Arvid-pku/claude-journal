@@ -7,7 +7,13 @@ import { state, api, apiPut, apiPost, apiDelete, onSessionSelect,
 export function renderSidebar() {
   const nav = document.getElementById('project-list');
   nav.innerHTML = '';
-  for (const project of state.projects) {
+
+  const providerFilter = state.settings.providerFilter || 'all';
+  const claudeProjects = state.projects.filter(p => p.provider !== 'codex');
+  const codexProjects = state.projects.filter(p => p.provider === 'codex');
+  const hasBoth = claudeProjects.length > 0 && codexProjects.length > 0;
+
+  function appendProjectGroup(container, project) {
     const group = document.createElement('div');
     group.className = 'project-group';
     group.innerHTML = `
@@ -19,7 +25,31 @@ export function renderSidebar() {
       </div>
       <div class="project-sessions" data-project="${project.id}"></div>`;
     group.querySelector('.project-header').addEventListener('click', (e) => toggleProject(project.id, e.currentTarget));
-    nav.appendChild(group);
+    container.appendChild(group);
+  }
+
+  function renderProviderSection(projects, label) {
+    if (!projects.length) return;
+    const section = document.createElement('div');
+    section.className = 'provider-section';
+    const totalSessions = projects.reduce((sum, p) => sum + (p.sessionCount || 0), 0);
+    const sectionHeader = document.createElement('div');
+    sectionHeader.className = 'provider-section-header';
+    sectionHeader.innerHTML = `<span class="provider-section-label">${label}</span><span class="provider-section-count">${totalSessions}</span><span class="provider-section-toggle">&#9662;</span>`;
+    sectionHeader.addEventListener('click', () => section.classList.toggle('provider-collapsed'));
+    section.appendChild(sectionHeader);
+    for (const project of projects) appendProjectGroup(section, project);
+    nav.appendChild(section);
+  }
+
+  if (providerFilter !== 'codex' && claudeProjects.length) {
+    if (hasBoth) renderProviderSection(claudeProjects, 'Claude Code');
+    else for (const p of claudeProjects) appendProjectGroup(nav, p);
+  }
+
+  if (providerFilter !== 'claude' && codexProjects.length) {
+    if (hasBoth) renderProviderSection(codexProjects, 'Codex');
+    else for (const p of codexProjects) appendProjectGroup(nav, p);
   }
 }
 

@@ -288,6 +288,14 @@
 
           <div class="settings-section-title" style="margin-top:16px">Sessions</div>
           <div class="settings-group">
+            <label>Show providers</label>
+            <select id="setting-provider-filter" class="modal-select">
+              <option value="all">All (Claude + Codex)</option>
+              <option value="claude">Claude Code only</option>
+              <option value="codex">Codex only</option>
+            </select>
+          </div>
+          <div class="settings-group">
             <label>Sort order</label>
             <select id="setting-session-sort" class="modal-select">
               <option value="newest">Newest first</option>

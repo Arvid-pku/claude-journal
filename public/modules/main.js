@@ -1,5 +1,5 @@
 import { state, DEFAULTS, api, apiPost, apiPut, apiDelete, IC, setAfterRender, setOnSessionSelect, setOnAnnotationChange,
-  showModal, hideModal, renderMarkdown, escapeHtml, shortenPath, formatCost, applySettings } from './state.js';
+  showModal, hideModal, renderMarkdown, escapeHtml, shortenPath, formatTime, formatCost, applySettings } from './state.js';
 import { renderSidebar, loadSessions, renderSessionList, updateSidebarActive,
   hideContextMenu, pinSession, renameSession, duplicateSession, moveSession, deleteSession, setupResize, toggleBulkMode } from './sidebar.js';
 import { processMessages, renderMessages, updateSessionInfo, updateStats, startEditing, showLoadingSkeleton } from './messages.js';
@@ -312,6 +312,7 @@ const SETTING_FIELDS = [
   { id: 'setting-adv-search', key: 'advancedSearch', type: 'checkbox' },
   { id: 'setting-bulk-ops', key: 'enableBulkOps', type: 'checkbox' },
   { id: 'setting-project-dash', key: 'enableProjectDashboard', type: 'checkbox' },
+  { id: 'setting-provider-filter', key: 'providerFilter', type: 'select' },
 ];
 
 async function showSettings() {
@@ -348,6 +349,7 @@ async function saveSettings() {
     localStorage.setItem('theme', theme);
     hideModal('settings-modal');
     if (state.displayMessages.length) renderMessages();
+    renderSidebar();
     for (const [pid, sessions] of Object.entries(state.sessions)) {
       const c = document.querySelector(`.project-sessions[data-project="${pid}"]`);
       if (c) renderSessionList(pid, sessions, c);
@@ -359,8 +361,6 @@ async function saveSettings() {
     }
   } catch (err) { toast(`Failed: ${err.message}`, 'error'); }
 }
-
-// ── Sidebar Tabs (Starred / Notes) ──────────────────────────────────────
 
 // ── Confirm Action (with suppress) ──────────────────────────────────────
 
@@ -564,8 +564,6 @@ function exportSession() {
   a.click();
   toast('Exported as Markdown', 'success', 4000);
 }
-
-function formatTime(ts) { return ts ? new Date(ts).toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', hour12: false }) : ''; }
 
 // ── Keyboard Navigation ─────────────────────────────────────────────────
 
@@ -843,11 +841,6 @@ function setupEvents() {
   });
   document.getElementById('btn-settings').addEventListener('click', showSettings);
   document.getElementById('settings-save').addEventListener('click', saveSettings);
-  // Theme toggle moved to settings — add as setting field
-  document.getElementById('btn-theme')?.addEventListener('click', () => {
-    const html = document.documentElement; html.dataset.theme = html.dataset.theme === 'dark' ? 'light' : 'dark';
-    localStorage.setItem('theme', html.dataset.theme);
-  });
   document.getElementById('btn-sidebar-close').addEventListener('click', () => document.getElementById('sidebar').classList.add('collapsed'));
   document.getElementById('btn-sidebar-open').addEventListener('click', () => document.getElementById('sidebar').classList.remove('collapsed'));
   document.getElementById('btn-settings-mini').addEventListener('click', showSettings);
@@ -951,27 +944,51 @@ function scrollToBottom() { document.getElementById('messages').scrollTop = docu
 // ── Random Tips ─────────────────────────────────────────────────────────
 
 const TIPS = [
+  // Navigation
   'Press / to search across all sessions',
   'j/k to move between messages, n/p to jump between turns',
   'Ctrl+Shift+F for global search',
-  'Click the star on any message to favorite it',
-  'Right-click a session to rename, duplicate, or delete',
-  'Press g then a to open the analytics dashboard',
-  'Press g then m to view project memory',
   'Ctrl+B toggles the sidebar',
-  'Ctrl+E exports the current session as Markdown',
+  'Press g then a for Analytics, g then m for Memory, g then h for Home',
+  'Press ? to see all keyboard shortcuts',
+  'Press Escape to close any modal or popup',
   'Click a dot on the right rail to jump to that turn',
+  // Annotations
+  'Click the star on any message to favorite it',
   'Highlight messages with colors to organize your notes',
-  'The lightning icon enables live auto-refresh',
+  'Add side comments — they auto-save when you click away',
+  'Tag messages with custom labels for easy filtering',
+  'View all starred, highlighted, and tagged messages in the sidebar',
+  // Session management
+  'Right-click a session to rename, duplicate, move, or delete',
+  'Pin important sessions to keep them at the top',
+  'Right-click "Select multiple" for batch operations',
+  'Use the filter box to search sessions by name across projects',
+  'Sessions are sorted by date — change it in Settings',
+  // Features
+  'The funnel icon filters by message type: human, assistant, tools',
+  'Edit tool calls show a color-coded diff view',
+  'Consecutive tool calls are grouped — click to expand',
+  'The timeline summary at the top shows files touched and tools used',
+  'Click the code copy button on any code block to copy it',
+  'Enable "Collapsible messages" in Settings to fold long messages',
+  // Export & sharing
+  'Ctrl+E exports the current session as Markdown or HTML',
+  'The HTML export is self-contained — share it with anyone',
+  'Install as a PWA for a native app experience',
+  // Live & analytics
+  'The lightning icon enables live auto-refresh as Claude responds',
+  'Cost estimates show API-equivalent pricing (input + output tokens)',
+  'The analytics dashboard shows daily cost, tool usage, and activity heatmaps',
+  'Filter analytics by date range — click 7d, 14d, 30d, or set custom dates',
+  // Codex
+  'Claude Journal supports both Claude Code and Codex sessions',
+  'Filter by provider in the sidebar to show only Claude or Codex',
+  // Misc
   'Edit any message — changes sync back to the JSONL file',
   'Click "View subagent conversation" inside Agent tool calls',
-  'Double-click a session name in the sidebar to rename it',
-  'Use the gear icon to customize font size, compact mode, and more',
-  'Sessions are sorted by date — change it in Settings',
-  'Install as a PWA for a native app experience',
-  'Cost estimates are shown per message and per session',
-  'Press Escape to close any modal or popup',
-  'Press ? to see all keyboard shortcuts',
+  'Use the gear icon to customize font size, theme, and toggle features',
+  'Run as a background daemon: claude-journal --daemon',
 ];
 
 let tipIdx = Math.floor(Math.random() * TIPS.length);

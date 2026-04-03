@@ -158,8 +158,6 @@ html, body {
   min-width: 0;
 }
 
-/* (old sidebar-search replaced by sidebar-search-inline + sidebar-menu) */
-
 .sidebar-nav {
   flex: 1;
   overflow-y: auto;
@@ -194,6 +192,40 @@ html, body {
 .project-header:not(.collapsed) .project-icon { color: var(--accent); }
 .project-header.collapsed .folder-open { display: none; }
 .project-header:not(.collapsed) .folder-closed { display: none; }
+
+/* ── Provider sections ─────────────────────────────────────────────────── */
+
+.provider-section { border-bottom: 1px solid var(--border); padding-bottom: 4px; margin-bottom: 4px; }
+.provider-section:last-child { border-bottom: none; margin-bottom: 0; }
+
+.provider-section-header {
+  display: flex;
+  align-items: center;
+  padding: 6px 12px;
+  cursor: pointer;
+  user-select: none;
+}
+.provider-section-header:hover { background: var(--bg-hover); }
+.provider-section-label {
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+.provider-section-count {
+  font-size: 10px;
+  color: var(--text-muted);
+  margin-left: 6px;
+}
+.provider-section-toggle {
+  margin-left: auto;
+  font-size: 10px;
+  color: var(--text-muted);
+  transition: transform var(--transition);
+}
+.provider-collapsed .provider-section-toggle { transform: rotate(-90deg); }
+.provider-collapsed .project-group { display: none; }
 
 .project-header .arrow {
   transition: transform var(--transition);
@@ -271,8 +303,6 @@ html, body {
   margin-top: 3px;
   flex-wrap: wrap;
 }
-
-.session-meta-line .meta-sep { color: var(--text-muted); }
 
 .session-stats {
   font-size: 10px;
@@ -1050,8 +1080,6 @@ kbd {
 
 .thinking-content.expanded { display: block; }
 
-/* (old msg-note removed — unified into side comments) */
-
 /* ── Token usage ───────────────────────────────────────────────────────── */
 
 .token-usage {
@@ -1243,15 +1271,6 @@ kbd {
   color: var(--text-muted);
 }
 
-/* ── Search highlight ──────────────────────────────────────────────────── */
-
-mark.search-hit {
-  background: var(--yellow);
-  color: var(--bg-base);
-  border-radius: 2px;
-  padding: 0 2px;
-}
-
 /* ── Hidden utility ────────────────────────────────────────────────────── */
 
 .hidden { display: none !important; }
@@ -1313,7 +1332,6 @@ mark.search-hit {
 /* ── Claude-style light refinements ────────────────────────────────────── */
 
 [data-theme="light"] .sidebar-header { background: var(--bg-elevated); }
-[data-theme="light"] .logo svg { color: var(--accent); }
 [data-theme="light"] .session-item.active { border-left-color: var(--accent); }
 [data-theme="light"] #topbar { background: var(--bg-surface); border-bottom-color: var(--border); }
 [data-theme="light"] #statusbar { background: var(--bg-elevated); }
@@ -1532,10 +1550,6 @@ mark.search-hit {
 .compact .tool-block { margin: 4px 0; }
 .compact .tool-header { padding: 5px 10px; }
 
-/* ── Message width ─────────────────────────────────────────────────────── */
-
-.message { max-width: var(--msg-max-width, 900px); }
-
 @media (max-width: 768px) {
   .settings-columns { flex-direction: column; gap: 16px; }
 }
@@ -1705,13 +1719,6 @@ mark.search-hit {
   margin-top: 2px;
 }
 
-.bookmark-meta {
-  display: flex;
-  gap: 8px;
-  font-size: 11px;
-  color: var(--text-muted);
-}
-
 /* ── Side Comments (Google Docs style) ─────────────────────────────────── */
 
 .msg-comment {
@@ -1797,8 +1804,6 @@ mark.search-hit {
   text-transform: uppercase;
   letter-spacing: 0.5px;
 }
-
-/* (sidebar filters replaced by sidebar tabs above) */
 
 /* ── Delete button ─────────────────────────────────────────────────────── */
 
@@ -2170,15 +2175,6 @@ mark.search-hit {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
   border-radius: var(--radius-lg);
-}
-
-.message-inner.flash {
-  animation: flashHighlight 1.5s ease;
-}
-
-@keyframes flashHighlight {
-  0%, 100% { background: transparent; }
-  30% { background: var(--accent-dim); }
 }
 
 /* ── Analytics Dashboard ───────────────────────────────────────────────── */
@@ -3023,7 +3019,7 @@ pre:hover .code-copy-btn { opacity: 1; }
   font-size: 12px;
   margin-bottom: 4px;
 }
-.timeline-tool-name { width: 60px; color: var(--text-secondary); font-weight: 500; text-align: right; }
+.timeline-tool-name { width: 70px; color: var(--text-secondary); font-weight: 500; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 0; }
 .timeline-tool-bar {
   flex: 1;
   height: 6px;
@@ -3236,16 +3232,12 @@ pre:hover .code-copy-btn { opacity: 1; }
   font-size: 12px;
   margin-bottom: 4px;
 }
-.dash-tool-name { width: 50px; color: var(--text-secondary); font-weight: 500; text-align: right; }
+.dash-tool-name { width: 60px; color: var(--text-secondary); font-weight: 500; text-align: right; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; flex-shrink: 0; }
 .dash-tool-bar { flex: 1; height: 5px; background: var(--bg-elevated); border-radius: 3px; overflow: hidden; }
 .dash-tool-bar > div { height: 100%; background: var(--accent); border-radius: 3px; }
 .dash-tool-count { font-size: 11px; color: var(--text-muted); width: 30px; }
 .dash-cost-chart { display: flex; align-items: flex-end; gap: 2px; height: 64px; }
 .dash-cost-bar { width: 8px; background: var(--accent); border-radius: 2px 2px 0 0; min-height: 2px; }
-
-/* ── Settings 3-column ─────────────────────────────────────────────────── */
-
-.settings-columns { grid-template-columns: 1fr 1fr 1fr; }
 
 /* ── Print ─────────────────────────────────────────────────────────────── */
 
