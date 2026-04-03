@@ -82,12 +82,16 @@ jobs:
           body: |
             ## Install
 
-            **Recommended:** `npx claude-journal` (no download needed)
+            **Recommended:**
+            ```bash
+            npm install -g claude-journal
+            claude-journal --daemon --port 5249
+            ```
 
-            **Desktop app downloads below.**
+            **[Interactive Guide](https://arvid-pku.github.io/claude-journal/)** | **Desktop app downloads below.**
 
             ### macOS note
-            The .dmg is not code-signed. macOS will show "damaged" or "unidentified developer". Run this after opening the .dmg:
+            The .dmg is not code-signed. macOS will show "damaged" or "unidentified developer". Run this after installing:
             ```
             xattr -cr "/Applications/Claude Journal.app"
             ```

@@ -955,7 +955,7 @@ function setupEvents() {
       if (action === 'analytics') { clearSessionContext(); navigate('analytics', { projectId: state.currentProject }); showAnalytics(state.currentProject); return; }
       document.getElementById('sidebar').classList.remove('collapsed');
       if (action === 'search') setTimeout(() => document.getElementById('sidebar-search').querySelector('input')?.focus(), 200);
-      else if (action === 'starred' || action === 'highlights' || action === 'notes') setTimeout(() => toggleSidebarPanel(action), 200);
+      else if (action === 'starred' || action === 'highlights' || action === 'notes' || action === 'tags') setTimeout(() => toggleSidebarPanel(action), 200);
     });
   });
 

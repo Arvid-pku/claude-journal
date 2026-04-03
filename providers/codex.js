@@ -386,6 +386,7 @@ function parseMessages(sessionId) {
 function postProcess(messages) {
   // Convert _result fields into the format processMessages expects (tool_result in user messages)
   const result = [];
+  let resultIdx = 0;
   for (const msg of messages) {
     result.push(msg);
     // If this assistant message has tool_use with _result, create a synthetic user tool_result
@@ -394,7 +395,7 @@ function postProcess(messages) {
         if (block.type === 'tool_use' && block._result) {
           result.push({
             type: 'user',
-            uuid: stableId(lineIdx, normalized.length),
+            uuid: crypto.createHash('md5').update(`result:${msg.uuid}:${resultIdx++}`).digest('hex').replace(/(.{8})(.{4})(.{4})(.{4})(.{12})/, '$1-$2-$3-$4-$5'),
             timestamp: msg.timestamp,
             message: [{ type: 'tool_result', tool_use_id: block.id, content: block._result.content, is_error: block._result.isError }],
           });
