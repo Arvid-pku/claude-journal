@@ -10,6 +10,11 @@
     <img src="https://img.shields.io/badge/node-%3E%3D18-blue" alt="node">
     <img src="https://img.shields.io/badge/license-MIT-green" alt="license">
   </p>
+  <p align="center">
+    <a href="https://arvid-pku.github.io/claude-journal/"><strong>Interactive Guide</strong></a> &middot;
+    <a href="https://www.npmjs.com/package/claude-journal">npm</a> &middot;
+    <a href="https://github.com/Arvid-pku/claude-journal/releases">Releases</a>
+  </p>
 </p>
 
 <p align="center">
@@ -236,3 +241,9 @@ Ideas that would be great to have:
 ## License
 
 MIT
+
+---
+
+<p align="center">
+  Built by <a href="https://github.com/Arvid-pku">Xunjian Yin</a>
+</p>
