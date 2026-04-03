@@ -1075,7 +1075,7 @@ const TIPS = [
   'The funnel icon filters by message type: human, assistant, tools',
   'Edit tool calls show a color-coded diff view',
   'Consecutive tool calls are grouped — click to expand',
-  'The timeline summary at the top shows files touched and tools used',
+  'The session overview at the top shows files touched and tools used',
   'Click the code copy button on any code block to copy it',
   'Enable "Collapsible messages" in Settings to fold long messages',
   // Export & sharing

@@ -1,3 +1,5 @@
+**English** | [中文](README.zh.md) | [日本語](README.ja.md) | [한국어](README.ko.md) | [Español](README.es.md) | [Português](README.pt.md)
+
 <p align="center">
   <h1 align="center">Claude Journal</h1>
   <p align="center">
@@ -84,7 +86,7 @@ Daily cost and token charts, activity heatmaps, tool usage breakdown, model dist
 
 - **Diff view for Edit calls** — red/green unified diff instead of raw old/new text
 - **Tool call grouping** — 3+ consecutive tools collapsed into a summary
-- **Session timeline** — overview card showing first prompt, files touched, tool usage bars
+- **Session overview** — summary card showing first prompt, files touched, tool usage bars
 - **Code copy buttons** — one-click copy on every code block
 - **Subagent expansion** — view nested Agent conversations inline
 - **Message type filters** — toggle Human, Assistant, Tool Calls, Thinking, and specific tool types
@@ -108,7 +110,7 @@ Markdown or self-contained HTML (with inline CSS, shareable with anyone).
 
 ### Everything Is Toggleable
 
-Every feature can be disabled in Settings. Users who prefer simplicity can turn off avatars, timeline, diff view, tool grouping, code copy buttons, tags, and more.
+Every feature can be disabled in Settings. Users who prefer simplicity can turn off avatars, session overview, diff view, tool grouping, code copy buttons, tags, and more.
 
 ---
 
@@ -184,7 +186,7 @@ claude-journal/
   public/
     modules/               Vanilla JS ES modules (no build step)
       main.js              App init, routing, chat, keyboard shortcuts
-      messages.js           Rendering, diff view, timeline, tool grouping, tags
+      messages.js           Rendering, diff view, session overview, tool grouping, tags
       sidebar.js           Session list, project management, bulk ops
       analytics.js         Charts, heatmaps, project dashboard
       search.js            Global search with filters

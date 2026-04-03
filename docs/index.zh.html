@@ -1,9 +1,9 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh-CN">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Claude Journal — Guide</title>
+  <title>Claude Journal — 使用指南</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>C</text></svg>">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
@@ -127,9 +127,8 @@
     .hs:hover .hs-desc,.hs.on .hs-desc{opacity:1;transform:translateY(0)}
     /* Right-side hotspots */
     .hs-tip.right{left:auto;right:32px} .hs-tip.right::before{left:auto;right:-5px;border-right-color:transparent;border-left-color:var(--accent)}
-    .hs-desc.right{left:auto;right:32px}
-    /* Inline hotspots (positioned inside their parent element) */
     .hs-inline{position:absolute!important}
+    .hs-desc.right{left:auto;right:32px}
 
     /* Mock analytics */
     .m-an{flex:1;overflow-y:auto;padding:20px 24px}
@@ -187,13 +186,13 @@
 
 <!-- Hero -->
 <div class="hero">
-  <div class="hero-lang"><a href="index.html">English</a> | <a href="index.zh.html">中文</a></div>
-  <div class="badge"><span class="dot"></span> Open Source &middot; Claude Code & Codex</div>
-  <h1>Your AI conversations,<br><span>beautifully managed.</span></h1>
-  <p>Not just a viewer. Talk to Claude & Codex from your browser, edit real history, annotate, search, and analyze everything.</p>
+  <div class="hero-lang"><a href="index.html">English</a> | <b>中文</b></div>
+  <div class="badge"><span class="dot"></span> 开源项目 &middot; Claude Code & Codex</div>
+  <h1>AI 对话，<br><span>优雅管理。</span></h1>
+  <p>不只是查看器。在浏览器中与 Claude 和 Codex 对话，编辑真实历史记录，添加批注、搜索和分析一切。</p>
   <div class="ha">
     <a href="https://github.com/Arvid-pku/claude-journal" class="btn bp"><svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405s2.04.135 3 .405c2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z"/></svg>GitHub</a>
-    <a href="https://www.npmjs.com/package/claude-journal" class="btn bs"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Install</a>
+    <a href="https://www.npmjs.com/package/claude-journal" class="btn bs"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>安装</a>
   </div>
   <div class="hi"><div class="cb"><span class="g">npm install -g</span> claude-journal && claude-journal <span class="b">--daemon --port 5249</span></div></div>
   <div class="hero-s"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg></div>
@@ -201,9 +200,9 @@
 
 <!-- Main experience -->
 <section class="reveal">
-  <div class="sl">The Main Experience</div>
-  <h2>Talk, edit, and annotate</h2>
-  <p>Resume conversations from the browser. Star, highlight, comment on any message. Edits write to the real JSONL files.</p>
+  <div class="sl">核心体验</div>
+  <h2>对话、编辑、批注</h2>
+  <p>在浏览器中继续对话。收藏、高亮、评论任何消息。编辑内容直接写入真实的 JSONL 文件。</p>
 
   <div class="mf" id="main-mock">
     <div class="mt"><div class="md r"></div><div class="md y"></div><div class="md g"></div><span style="margin-left:8px;font-size:12px;color:var(--tm)">Claude Journal</span></div>
@@ -246,19 +245,19 @@
             <div class="m-ov-bar"><span class="n">Edit</span><div class="b"><div class="f" style="width:90%"></div></div><span class="c">47</span></div>
             <div class="m-ov-bar"><span class="n">Bash</span><div class="b"><div class="f" style="width:65%"></div></div><span class="c">34</span></div>
             <div class="m-ov-bar"><span class="n">Read</span><div class="b"><div class="f" style="width:40%"></div></div><span class="c">21</span></div>
-            <div class="hs hs-inline" style="top:-8px;right:-8px" data-hs="overview"><div class="hs-d"></div><div class="hs-tip right">Session Overview</div><div class="hs-desc right">Auto-generated summary: first prompt, tool usage bars, files touched. Click &times; to dismiss. Toggle in Settings.</div></div>
+            <div class="hs hs-inline" style="top:-8px;right:-8px" data-hs="overview"><div class="hs-d"></div><div class="hs-tip right">会话概览</div><div class="hs-desc right">自动生成的摘要：首条提示词、工具使用统计、涉及文件。点击 &times; 关闭。</div></div>
           </div>
           <!-- User message -->
           <div class="mm">
             <div class="mm-h"><div class="mm-av u">Y</div><span class="mm-role">You</span><span class="mm-time">14:32</span></div>
             <div class="mm-body usr">I want to build a conversation viewer with live refresh, annotations, and analytics. Can you help?</div>
             <div class="mm-act" style="opacity:1;position:relative">
-              <span title="Star" style="position:relative"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg><div class="hs hs-inline" data-hs="star"><div class="hs-d" style="width:18px;height:18px"></div><div class="hs-tip">Star</div><div class="hs-desc">Favorite this message. Browse all starred messages in the sidebar.</div></div></span>
-              <span title="Highlight" style="position:relative"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 11-6 6v3h9l3-3"/><path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/></svg><div class="hs hs-inline" data-hs="highlight"><div class="hs-d" style="width:18px;height:18px"></div><div class="hs-tip">Highlight</div><div class="hs-desc">Mark with 5 colors. Browse all highlights in the sidebar.</div></div></span>
-              <span title="Comment" style="position:relative"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="9" y1="10" x2="15" y2="10"/></svg><div class="hs hs-inline" data-hs="comment"><div class="hs-d" style="width:18px;height:18px"></div><div class="hs-tip">Comment</div><div class="hs-desc">Add a Google Docs-style side comment. Auto-saves on blur.</div></div></span>
+              <span title="Star" style="position:relative"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg><div class="hs hs-inline" data-hs="star"><div class="hs-d" style="width:18px;height:18px"></div><div class="hs-tip">收藏</div><div class="hs-desc">收藏此消息。在侧边栏中浏览所有收藏。</div></div></span>
+              <span title="Highlight" style="position:relative"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m9 11-6 6v3h9l3-3"/><path d="m22 12-4.6 4.6a2 2 0 0 1-2.8 0l-5.2-5.2a2 2 0 0 1 0-2.8L14 4"/></svg><div class="hs hs-inline" data-hs="highlight"><div class="hs-d" style="width:18px;height:18px"></div><div class="hs-tip">高亮</div><div class="hs-desc">使用 5 种颜色标记。在侧边栏中浏览所有高亮。</div></div></span>
+              <span title="Comment" style="position:relative"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/><line x1="9" y1="10" x2="15" y2="10"/></svg><div class="hs hs-inline" data-hs="comment"><div class="hs-d" style="width:18px;height:18px"></div><div class="hs-tip">评论</div><div class="hs-desc">添加类似 Google Docs 的侧边评论。自动保存。</div></div></span>
               <span title="Copy"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect width="14" height="14" x="8" y="8" rx="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg></span>
-              <span title="Edit" style="position:relative"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg><div class="hs hs-inline" data-hs="edit"><div class="hs-d" style="width:18px;height:18px"></div><div class="hs-tip">Edit</div><div class="hs-desc">Edit the message text. Writes directly to the JSONL file.</div></div></span>
-              <span title="Delete" style="color:var(--red);position:relative"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg><div class="hs hs-inline" data-hs="delete"><div class="hs-d" style="width:18px;height:18px"></div><div class="hs-tip">Delete</div><div class="hs-desc">Remove this message from the JSONL file permanently.</div></div></span>
+              <span title="Edit" style="position:relative"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 3a2.85 2.83 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5Z"/><path d="m15 5 4 4"/></svg><div class="hs hs-inline" data-hs="edit"><div class="hs-d" style="width:18px;height:18px"></div><div class="hs-tip">编辑</div><div class="hs-desc">编辑文本内容。直接写入 JSONL 文件。</div></div></span>
+              <span title="Delete" style="color:var(--red);position:relative"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 6h18"/><path d="M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6"/><path d="M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/></svg><div class="hs hs-inline" data-hs="delete"><div class="hs-d" style="width:18px;height:18px"></div><div class="hs-tip">删除</div><div class="hs-desc">从 JSONL 文件中永久删除此消息。</div></div></span>
             </div>
           </div>
           <!-- Assistant message -->
@@ -282,14 +281,14 @@
           <div class="m-chat-w" style="position:relative">
             <span class="m-chat-in">Reply...</span>
             <div class="m-chat-send"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m22 2-7 20-4-9-9-4 20-7z"/></svg></div>
-            <div class="hs hs-inline" style="top:-10px;left:50%;transform:translateX(-50%)" data-hs="chat"><div class="hs-d"></div><div class="hs-tip">Chat Input</div><div class="hs-desc">Type a message and Claude Code resumes the exact conversation. Responses stream in real-time. Works with Codex too.</div></div>
+            <div class="hs hs-inline" style="top:-10px;left:50%;transform:translateX(-50%)" data-hs="chat"><div class="hs-d"></div><div class="hs-tip">聊天输入框</div><div class="hs-desc">输入消息后，Claude Code 会继续该对话。实时流式回复。同样支持 Codex。</div></div>
           </div>
         </div>
       </div>
       <!-- Rail -->
       <div class="m-rail" style="position:relative">
         <div class="m-rail-d ac"></div><div class="m-rail-d"></div><div class="m-rail-d"></div><div class="m-rail-d"></div><div class="m-rail-d"></div><div class="m-rail-d"></div><div class="m-rail-d"></div><div class="m-rail-d"></div><div class="m-rail-d"></div>
-        <div class="hs hs-inline" style="top:4px;left:-10px" data-hs="rail"><div class="hs-d"></div><div class="hs-tip right">Conversation Rail</div><div class="hs-desc right">Each dot is a user turn. Click any dot to jump to that point.</div></div>
+        <div class="hs hs-inline" style="top:4px;left:-10px" data-hs="rail"><div class="hs-d"></div><div class="hs-tip right">对话导航栏</div><div class="hs-desc right">每个圆点代表一个用户轮次。点击可跳转到对应位置。</div></div>
       </div>
     </div>
   </div>
@@ -297,9 +296,9 @@
 
 <!-- Analytics -->
 <section class="reveal">
-  <div class="sl">Insights</div>
-  <h2>Understand your usage</h2>
-  <p>Track costs, tokens, tool usage, and activity patterns across all your conversations.</p>
+  <div class="sl">数据洞察</div>
+  <h2>全面了解你的使用情况</h2>
+  <p>跟踪费用、token 用量、工具使用和活动模式，覆盖所有对话。</p>
   <div class="mf">
     <div class="mt"><div class="md r"></div><div class="md y"></div><div class="md g"></div></div>
     <div class="mb" style="height:380px">
@@ -343,65 +342,65 @@
 
 <!-- Features -->
 <section class="reveal">
-  <div class="sl">Everything You Need</div>
-  <h2>Built for power users</h2>
-  <p>Every feature is toggleable in Settings. Keep it minimal or turn everything on.</p>
+  <div class="sl">功能一览</div>
+  <h2>为高级用户打造</h2>
+  <p>所有功能均可在设置中开关。保持简洁，或全部开启。</p>
   <div class="fg">
-    <div class="fc"><div class="fc-ic" style="background:rgba(198,96,63,.1);color:var(--accent)">&#9733;</div><h3>Rich Annotations</h3><p>Star, highlight (5 colors), tag with custom labels, add side comments. Browse all annotations across sessions in the sidebar.</p></div>
-    <div class="fc"><div class="fc-ic" style="background:rgba(22,163,74,.1);color:var(--green)">&#9889;</div><h3>Live Auto-Refresh</h3><p>Watch conversations update in real-time as Claude responds. WebSocket file watching with scroll-to-bottom button.</p></div>
-    <div class="fc"><div class="fc-ic" style="background:rgba(37,99,235,.1);color:var(--blue)">/</div><h3>Global Search</h3><p>Search across all sessions in all projects. Filter by role, tool type, and date range. Keyboard-driven navigation.</p></div>
-    <div class="fc"><div class="fc-ic" style="background:rgba(124,58,237,.1);color:var(--purple)">&#916;</div><h3>Diff View</h3><p>Edit tool calls show red/green unified diffs. 3+ consecutive tool calls grouped into collapsible summaries.</p></div>
-    <div class="fc"><div class="fc-ic" style="background:rgba(219,39,119,.1);color:var(--pink)">&#128202;</div><h3>Analytics</h3><p>Daily cost charts, token usage, activity heatmaps, tool breakdown, model distribution. Filter by date range and project.</p></div>
-    <div class="fc"><div class="fc-ic" style="background:rgba(202,138,4,.1);color:var(--yellow)">&#128193;</div><h3>Multi-Provider</h3><p>Claude Code and OpenAI Codex in one interface. Collapsible provider sections. Pin or hide projects.</p></div>
+    <div class="fc"><div class="fc-ic" style="background:rgba(198,96,63,.1);color:var(--accent)">&#9733;</div><h3>丰富的批注</h3><p>收藏、高亮（5 种颜色）、自定义标签、侧边评论。在侧边栏中浏览所有会话的批注。</p></div>
+    <div class="fc"><div class="fc-ic" style="background:rgba(22,163,74,.1);color:var(--green)">&#9889;</div><h3>实时自动刷新</h3><p>当 Claude 回复时，对话实时更新。基于 WebSocket 文件监听，带有滚动到底部按钮。</p></div>
+    <div class="fc"><div class="fc-ic" style="background:rgba(37,99,235,.1);color:var(--blue)">/</div><h3>全局搜索</h3><p>跨项目搜索所有会话。按角色、工具类型和日期范围过滤。支持键盘驱动导航。</p></div>
+    <div class="fc"><div class="fc-ic" style="background:rgba(124,58,237,.1);color:var(--purple)">&#916;</div><h3>差异视图</h3><p>Edit 工具调用展示红绿统一差异。连续 3 个以上的工具调用自动折叠为摘要。</p></div>
+    <div class="fc"><div class="fc-ic" style="background:rgba(219,39,119,.1);color:var(--pink)">&#128202;</div><h3>数据分析</h3><p>每日费用图表、token 用量、活动热力图、工具分布、模型占比。按日期范围和项目过滤。</p></div>
+    <div class="fc"><div class="fc-ic" style="background:rgba(202,138,4,.1);color:var(--yellow)">&#128193;</div><h3>多平台支持</h3><p>Claude Code 和 OpenAI Codex 统一界面。可折叠的平台分组。支持置顶或隐藏项目。</p></div>
   </div>
 </section>
 
 <!-- Get Started -->
 <section class="reveal">
-  <div class="sl">Get Started</div>
-  <h2>Up and running in 30 seconds</h2>
+  <div class="sl">快速开始</div>
+  <h2>30 秒即可启动运行</h2>
   <div class="steps">
-    <div class="step"><div class="step-n">1</div><div class="step-c"><h3>Install globally</h3><p><span class="ci">npm install -g claude-journal</span></p></div></div>
-    <div class="step"><div class="step-n">2</div><div class="step-c"><h3>Start the daemon</h3><p><span class="ci">claude-journal --daemon --port 5249</span></p><p>Runs in the background. Survives closing your terminal.</p></div></div>
-    <div class="step"><div class="step-n">3</div><div class="step-c"><h3>Open your browser</h3><p>Go to <span class="ci">http://localhost:5249</span> &mdash; your conversations are already there.</p></div></div>
-    <div class="step"><div class="step-n">4</div><div class="step-c"><h3>Start talking</h3><p>Click any session and type in the floating input box. Claude resumes with full context.</p></div></div>
+    <div class="step"><div class="step-n">1</div><div class="step-c"><h3>全局安装</h3><p><span class="ci">npm install -g claude-journal</span></p></div></div>
+    <div class="step"><div class="step-n">2</div><div class="step-c"><h3>启动守护进程</h3><p><span class="ci">claude-journal --daemon --port 5249</span></p><p>在后台运行，关闭终端也不会中断。</p></div></div>
+    <div class="step"><div class="step-n">3</div><div class="step-c"><h3>打开浏览器</h3><p>访问 <span class="ci">http://localhost:5249</span> &mdash; 你的对话记录已在那里等候。</p></div></div>
+    <div class="step"><div class="step-n">4</div><div class="step-c"><h3>开始对话</h3><p>点击任意会话，在浮动输入框中输入。Claude 会带着完整上下文继续对话。</p></div></div>
   </div>
 </section>
 
 <!-- Keyboard -->
 <section class="reveal">
-  <div class="sl">Power User</div>
-  <h2>Keyboard-first design</h2>
-  <p>Press <kbd>?</kbd> in the app to see all shortcuts.</p>
+  <div class="sl">高效操作</div>
+  <h2>键盘优先设计</h2>
+  <p>在应用中按 <kbd>?</kbd> 查看所有快捷键。</p>
   <div class="kg">
-    <div class="ki"><kbd>/</kbd> <span style="font-size:13px;color:var(--t2)">Global search</span></div>
-    <div class="ki"><kbd>j</kbd> <kbd>k</kbd> <span style="font-size:13px;color:var(--t2)">Navigate messages</span></div>
-    <div class="ki"><kbd>n</kbd> <kbd>p</kbd> <span style="font-size:13px;color:var(--t2)">Jump between turns</span></div>
-    <div class="ki"><kbd>Ctrl</kbd>+<kbd>B</kbd> <span style="font-size:13px;color:var(--t2)">Toggle sidebar</span></div>
-    <div class="ki"><kbd>Ctrl</kbd>+<kbd>E</kbd> <span style="font-size:13px;color:var(--t2)">Export</span></div>
-    <div class="ki"><kbd>g</kbd> <kbd>a</kbd> <span style="font-size:13px;color:var(--t2)">Analytics</span></div>
-    <div class="ki"><kbd>g</kbd> <kbd>h</kbd> <span style="font-size:13px;color:var(--t2)">Home</span></div>
-    <div class="ki"><kbd>Esc</kbd> <span style="font-size:13px;color:var(--t2)">Close anything</span></div>
+    <div class="ki"><kbd>/</kbd> <span style="font-size:13px;color:var(--t2)">全局搜索</span></div>
+    <div class="ki"><kbd>j</kbd> <kbd>k</kbd> <span style="font-size:13px;color:var(--t2)">浏览消息</span></div>
+    <div class="ki"><kbd>n</kbd> <kbd>p</kbd> <span style="font-size:13px;color:var(--t2)">跳转轮次</span></div>
+    <div class="ki"><kbd>Ctrl</kbd>+<kbd>B</kbd> <span style="font-size:13px;color:var(--t2)">切换侧边栏</span></div>
+    <div class="ki"><kbd>Ctrl</kbd>+<kbd>E</kbd> <span style="font-size:13px;color:var(--t2)">导出</span></div>
+    <div class="ki"><kbd>g</kbd> <kbd>a</kbd> <span style="font-size:13px;color:var(--t2)">数据分析</span></div>
+    <div class="ki"><kbd>g</kbd> <kbd>h</kbd> <span style="font-size:13px;color:var(--t2)">首页</span></div>
+    <div class="ki"><kbd>Esc</kbd> <span style="font-size:13px;color:var(--t2)">关闭任何面板</span></div>
   </div>
 </section>
 
 <!-- CTA -->
 <div class="cta reveal">
-  <h2>Ready to try?</h2>
-  <p>One command. No config. Your conversations are waiting.</p>
+  <h2>准备好试试了吗？</h2>
+  <p>一条命令，无需配置。你的对话记录已在等候。</p>
   <div class="cb" style="margin-bottom:24px"><span class="g">npm install -g</span> claude-journal && claude-journal <span class="b">--daemon --port 5249</span></div>
   <br><br>
-  <a href="https://github.com/Arvid-pku/claude-journal" class="btn bp" style="font-size:17px;padding:14px 36px">View on GitHub</a>
+  <a href="https://github.com/Arvid-pku/claude-journal" class="btn bp" style="font-size:17px;padding:14px 36px">在 GitHub 上查看</a>
 </div>
 
-<footer>Claude Journal &middot; MIT License &middot; Built by <a href="https://github.com/Arvid-pku">Xunjian Yin</a> &middot; <a href="https://github.com/Arvid-pku/claude-journal">GitHub</a> &middot; <a href="https://www.npmjs.com/package/claude-journal">npm</a></footer>
+<footer>Claude Journal &middot; MIT 许可证 &middot; 由 <a href="https://github.com/Arvid-pku">Xunjian Yin</a> 开发 &middot; <a href="https://github.com/Arvid-pku/claude-journal">GitHub</a> &middot; <a href="https://www.npmjs.com/package/claude-journal">npm</a></footer>
 
 <script>
   // Scroll reveal
   const obs=new IntersectionObserver(e=>{e.forEach(e=>{if(e.isIntersecting)e.target.classList.add('visible')})},{threshold:.1});
   document.querySelectorAll('.reveal').forEach(el=>obs.observe(el));
 
-  // Cycle hotspots by data-hs group (one at a time)
+  // Hotspot cycling — only cycle visible hotspots (hide overview dot when overview is "closed")
   const hsGroups=['overview','star','highlight','comment','edit','delete','rail','chat'];
   let hsi=0;
   function cycleHs(){
