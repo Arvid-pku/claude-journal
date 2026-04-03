@@ -6,7 +6,9 @@ const path = require('path');
 const crypto = require('crypto');
 const { exec } = require('child_process');
 const chokidar = require('chokidar');
-const codex = require('./providers/codex');
+// Codex provider (optional — graceful if unavailable)
+let codex;
+try { codex = require('./providers/codex'); } catch { codex = { isAvailable: () => false }; }
 
 // ── Config ──────────────────────────────────────────────────────────────────
 

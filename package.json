@@ -1,6 +1,6 @@
 {
   "name": "claude-journal",
-  "version": "1.2.0",
+  "version": "1.2.1",
   "description": "View, annotate, search, and analyze your Claude Code conversation history",
   "main": "server.js",
   "bin": {
@@ -27,7 +27,8 @@
   "files": [
     "server.js",
     "bin/",
-    "public/"
+    "public/",
+    "providers/"
   ],
   "dependencies": {
     "chokidar": "^4.0.3",
