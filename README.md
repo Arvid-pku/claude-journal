@@ -1,7 +1,8 @@
 <p align="center">
   <h1 align="center">Claude Journal</h1>
   <p align="center">
-    <strong>A beautiful, live web interface to view, annotate, search, and analyze your Claude Code conversation history.</strong>
+    <strong>View, annotate, search, and analyze your Claude Code & Codex conversations.</strong><br>
+    <em>Edit messages, rename sessions, delete history — changes write back to the real files.</em>
   </p>
   <p align="center">
     <a href="https://www.npmjs.com/package/claude-journal"><img src="https://img.shields.io/npm/v/claude-journal?color=c6603f&label=npm" alt="npm"></a>
@@ -11,9 +12,9 @@
   </p>
 </p>
 
----
-
-Claude Journal reads your Claude Code session files (`~/.claude/projects`) and serves them as an elegant, annotatable web UI with live updates, full-text search, analytics dashboards, and Google Docs-style side comments.
+<p align="center">
+  <img src="figures/mainpage.png" alt="Claude Journal — Home" width="800">
+</p>
 
 ## Quick Start
 
@@ -21,116 +22,170 @@ Claude Journal reads your Claude Code session files (`~/.claude/projects`) and s
 npx claude-journal
 ```
 
-That's it. Opens your browser automatically at [http://localhost:8086](http://localhost:8086).
+Opens automatically in your browser. No config needed — it finds your `~/.claude/projects` and `~/.codex/sessions` automatically.
 
-> **First time?** If you haven't used Claude Code yet, Claude Journal will show a welcome page with setup instructions. Start a conversation with `claude` first, then refresh.
+## Why Claude Journal?
+
+**Your conversations are files.** Claude Code stores every session as JSONL in `~/.claude/projects/`. Codex stores them in `~/.codex/sessions/`. Claude Journal reads these files directly and gives you a powerful web UI on top of them.
+
+**Changes are real.** When you rename a session, it writes a `custom-title` entry to the JSONL — so `claude --resume "my-name"` works. When you edit a message, the JSONL file is updated. When you delete a message, it's gone from the file. This isn't a read-only viewer — it's a tool that integrates with your workflow.
+
+**Both Claude Code and Codex.** One unified interface for all your AI coding conversations. Sessions are grouped by project, with collapsible provider sections.
+
+---
 
 ## Installation
 
-### One Command (recommended)
+### CLI (recommended)
 
 ```bash
-npx claude-journal
+npx claude-journal              # Run directly, opens browser
+npm install -g claude-journal   # Or install globally first
+claude-journal                  # Then run anytime
 ```
 
-### Global Install
+### Run in Background
 
 ```bash
-npm install -g claude-journal
-claude-journal
+claude-journal --daemon         # Runs without a terminal window
+claude-journal --status         # Check: Running (PID 12345) at http://localhost:8086
+claude-journal --stop           # Stop it
 ```
 
-### From Source
+The daemon survives closing your terminal. After a reboot, just run `claude-journal --daemon` again — no reinstall needed. For auto-start on login:
 
+```bash
+pm2 start claude-journal -- --daemon --no-open
+pm2 save && pm2 startup
+```
+
+### Desktop App
+
+Download the [AppImage / DMG / EXE](https://github.com/Arvid-pku/claude-journal/releases) from GitHub Releases. Sits in your system tray, starts the server automatically, and opens in your browser.
+
+> **macOS users:** The app is not code-signed. macOS will show _"Claude Journal is damaged"_. Fix:
+> ```bash
+> xattr -cr "/Applications/Claude Journal.app"
+> ```
+> Then open the app again — it will work normally.
+
+> **Linux users:** Make the AppImage executable: `chmod +x Claude-Journal-*.AppImage`
+
+<details>
+<summary>More options (Docker, from source)</summary>
+
+**From source:**
 ```bash
 git clone https://github.com/Arvid-pku/claude-journal.git
-cd claude-journal
-npm install
-npm start
+cd claude-journal && npm install && npm start
 ```
 
-### Docker
-
+**Docker:**
 ```bash
 docker build -t claude-journal .
 docker run -v ~/.claude/projects:/data -p 8086:8086 claude-journal
 ```
-
-### Desktop App (Linux/macOS/Windows)
-
-Download the [AppImage / DMG / EXE](https://github.com/Arvid-pku/claude-journal/releases) from GitHub Releases. Sits in your system tray.
+</details>
 
 ---
 
-## Features
+## Core Power: Edit Your History
 
-### Conversation Viewer
+<p align="center">
+  <img src="figures/Session Introduction.jpg" alt="Session view with annotations and editing" width="800">
+</p>
 
-Browse all your Claude Code sessions across every project. Messages render with full Markdown, syntax-highlighted code blocks, and collapsible tool call details.
+Claude Journal isn't just a viewer — it modifies the actual conversation files:
 
-- **Live auto-refresh** — watches the session file and updates the view in real-time as Claude responds
-- **Subagent expansion** — click "View subagent conversation" inside Agent tool calls to see the full nested conversation inline
-- **Project memory viewer** — browse all memory files (MEMORY.md, feedback, project notes) rendered as Markdown
-- **Inline message editing** — edit any message directly; changes sync back to the JSONL file
-- **Delete messages** — remove messages from the session with confirmation dialog
-- **Virtual scrolling** — handles sessions with 500+ messages via CSS `content-visibility`
+| Action | What happens to the file |
+|--------|--------------------------|
+| **Rename session** | Writes `custom-title` to the JSONL. `claude --resume "new-name"` picks it up immediately. |
+| **Edit message** | Updates the message content in the JSONL file. Change prompts, fix typos, clean up conversations. |
+| **Delete message** | Removes the line from the JSONL. Permanently erases that message from history. |
+| **Duplicate session** | Creates a new JSONL file — a full copy you can experiment with. |
+| **Move session** | Moves the JSONL file between project directories (with collision detection). |
+
+All file writes use atomic operations (temp file + rename) to prevent corruption, even while Claude Code is actively writing to the same file.
+
+---
+
+## Features at a Glance
 
 ### Annotations
 
-Annotate your conversations like a research paper.
+Star, highlight (5 colors), comment, and tag any message. Add session notes. Pin important sessions. All annotations are stored separately — your JSONL files stay clean.
 
-| Feature | Description |
-|---------|-------------|
-| **Favorites** | Star important messages. View all starred messages across sessions in the sidebar. |
-| **Highlights** | Color-highlight messages (yellow, green, blue, pink, purple). Browse all highlights in the sidebar. |
-| **Side Comments** | Google Docs-style comment cards on the right side of messages. Auto-save with visual "Saved" indicator. |
-| **Session Notes** | Freeform scratchpad per session in the notes panel. |
-| **Pin Sessions** | Pin important sessions to the top of the sidebar. |
+### Live Auto-Refresh
 
-All annotations persist server-side in JSON files and survive page refreshes, server restarts, and browser changes.
+The lightning icon enables real-time watching. As Claude responds, new messages appear instantly — no page refresh needed.
 
 ### Global Search
 
-Press `/` or `Ctrl+Shift+F` to open the command palette search. Searches across **all sessions in all projects** instantly.
-
-- Full-text search with highlighted snippets
-- Keyboard navigation (arrow keys + Enter)
-- Click any result to jump directly to that message
+Press `/` to search across **all sessions in all projects**. Filter by role, tool type, and date range.
 
 ### Analytics Dashboard
 
-Comprehensive usage analytics with interactive charts.
+<p align="center">
+  <img src="figures/Analytics.png" alt="Analytics dashboard" width="600">
+</p>
 
-- **Summary cards** — total cost, tokens, API calls, tool calls, sessions
-- **Daily cost chart** — bar chart with horizontal scroll for long date ranges
-- **Daily token usage** — stacked bars (input vs output)
-- **Activity heatmap** — day-of-week x hour grid showing when you're most active
-- **Tool usage breakdown** — which tools Claude uses most (Bash, Read, Edit, etc.)
-- **Model distribution** — cost split across Opus, Sonnet, Haiku
-- **Top sessions by cost** — find your most expensive conversations
-- **Date range filter** — quick buttons (7d, 14d, 30d, 90d) + custom date pickers
-- **Per-project scoping** — filter analytics to a single project
+Daily cost and token charts, activity heatmaps, tool usage breakdown, model distribution, top sessions by cost. Filter by date range (7d/14d/30d/90d or custom) and per-project.
+
+### Multi-Provider Support
+
+Claude Code (`~/.claude/projects/`) and OpenAI Codex (`~/.codex/sessions/`) in one view. Collapsible provider sections in the sidebar. Filter by provider in Settings.
+
+---
+
+## Detailed Features
+
+### Conversation Viewer
+
+- **Full Markdown rendering** with syntax-highlighted code blocks and **copy button** on every code block
+- **Collapsible tool calls** — click to expand Bash, Read, Edit, Grep, etc.
+- **Diff view for Edit calls** — red/green unified diff instead of raw text
+- **Tool call grouping** — 3+ consecutive tools are collapsed into a summary (e.g. "5 tool calls: Read x2, Bash x3")
+- **Session timeline** — overview card at top showing first prompt, files touched, and tool usage bars
+- **Subagent expansion** — click "View subagent conversation" to see nested Agent conversations inline
+- **Message avatars** — colored circles (Y/C/X) for visual scanning
+- **Virtual scrolling** — handles 500+ message sessions via `content-visibility`
+- **Message type filters** — funnel icon toggles visibility of Human, Assistant, Tool Calls, Thinking, Subagent, and specific tool types (Read, Edit, Bash, Grep, Web)
+
+### Annotations System
+
+| Feature | Description |
+|---------|-------------|
+| **Favorites** | Star messages. Browse all starred messages across sessions in the sidebar. |
+| **Highlights** | 5 colors (yellow, green, blue, pink, purple). Browse in sidebar. |
+| **Side Comments** | Google Docs-style cards on the right. Auto-save with "Saved" indicator. |
+| **Tags** | Custom labels (e.g. "bug", "insight"). Click to remove. Browse all tags in sidebar. |
+| **Session Notes** | Freeform scratchpad per session. |
+| **Pin Sessions** | Keep important sessions at the top of the sidebar. |
+
+Annotations persist in JSON files and survive restarts, browser changes, and page refreshes.
 
 ### Session Management
 
 Right-click any session for the context menu:
 
-- **Pin / Unpin** — keep important sessions at the top
-- **Rename** — inline editing, syncs to JSONL so `claude --resume <name>` works
-- **Duplicate** — create a copy of the session
-- **Move** — move between projects (with collision detection)
-- **Delete** — remove session and all associated data
+- **Pin / Unpin** — keep at top
+- **Rename** — inline editing, syncs to JSONL for `claude --resume`
+- **Duplicate** — full copy with "(Copy)" prefix
+- **Move** — to another project (with collision detection)
+- **Select multiple** — enter multi-select mode for batch delete
+- **Delete** — removes JSONL, subagent data, and annotations
 
-### Sidebar (Claude.ai-inspired)
+### Sidebar
 
-The sidebar mirrors Claude.ai's design:
+Mirrors Claude.ai's design:
 
-- **Collapsible** — shrinks to a 48px icon rail showing key actions
-- **Home** — overview page with recent sessions and keyboard shortcuts
+- **Collapsible** — shrinks to a 48px icon rail
+- **Home** — recent sessions, stats, keyboard shortcuts
 - **Search** — global cross-session search
 - **Analytics** — usage dashboard
-- **Starred / Highlights / Notes** — browse all annotations across sessions
-- **Recents** — session list grouped by pinned + recent, with cost and token counts
+- **Starred / Highlights / Notes / Tags** — browse annotations across all sessions
+- **Provider sections** — collapsible "Claude Code" and "Codex" groups with session counts
+- **Filter box** — search sessions by name with live count updates (e.g. "3/10")
 
 ### Keyboard Shortcuts
 
@@ -138,45 +193,36 @@ Press `?` to see all shortcuts in-app.
 
 | Key | Action |
 |-----|--------|
-| `?` | Show keyboard shortcuts |
 | `/` | Global search |
+| `?` | Show shortcuts help |
 | `j` / `k` | Navigate between messages |
 | `n` / `p` | Jump between conversation turns |
-| `Ctrl+F` | Search within current session |
+| `Ctrl+F` | Search within session |
 | `Ctrl+Shift+F` | Global search |
 | `Ctrl+B` | Toggle sidebar |
-| `Ctrl+E` | Export session as Markdown |
-| `g` then `h` | Go home |
-| `g` then `a` | Analytics |
-| `g` then `m` | Project memory |
-| `g` then `n` | Notes panel |
-| `g` then `s` | Settings |
-
-### Settings
-
-Configurable via the gear icon:
-
-- **Theme** — dark / light (Claude.ai-inspired warm light theme)
-- **Font size** — small / default / large
-- **Compact mode** — denser message layout
-- **Message width** — adjustable max width (400-2000px)
-- **Show/hide** — timestamps, token usage, cost estimates, thinking blocks
-- **System tags** — strip `<system-reminder>` and other meta tags
-- **Tool calls** — expand by default, max output preview length
-- **Session sort** — newest, oldest, most messages, highest cost, alphabetical
-- **Auto-scroll** — on live update
-- **Projects directory** — custom path (validates on save, warns if restart needed)
+| `Ctrl+E` | Export (Markdown or HTML) |
+| `Escape` | Close any modal, exit bulk mode |
+| `g` then `h/a/m/n/s` | Go to Home / Analytics / Memory / Notes / Settings |
 
 ### Export
 
-Export any session as Markdown with one click (`Ctrl+E`). Includes favorites, notes, and all message content.
+- **Markdown** — full conversation with favorites and notes
+- **HTML** — self-contained file with inline CSS, shareable with anyone
+
+### Settings
+
+Everything is toggleable — users who prefer simplicity can disable any feature:
+
+| Category | Options |
+|----------|---------|
+| **Display** | Theme (dark/light), font size, compact mode, message width, avatars, timestamps |
+| **Features** | Code copy buttons, collapsible messages, diff view, tool grouping, session timeline, loading skeletons, smooth scroll, tags, HTML export, advanced search, bulk operations, project dashboard |
+| **Sessions** | Provider filter (All/Claude/Codex), sort order, auto-scroll on live update |
+| **Server** | Projects directory, auto-open browser |
 
 ### PWA Support
 
-Install as a Progressive Web App for a native-like experience:
-- Works offline (cached static assets + API responses)
-- Installable on desktop and mobile
-- Graceful CDN fallback — works behind firewalls or offline
+Install as a Progressive Web App. Works offline with cached assets and API responses. Graceful fallback if CDN libraries (highlight.js, marked.js) are unavailable.
 
 ---
 
@@ -189,7 +235,7 @@ Options:
   -p, --port <port>     Port (default: 8086, auto-increments if busy)
   -d, --dir <path>      Path to .claude/projects directory
   -o, --open            Auto-open browser (default in interactive mode)
-  --no-open             Do not open browser
+  --no-open             Suppress browser auto-open
   --daemon              Run in background
   --stop                Stop background daemon
   --status              Check daemon status (shows PID and URL)
@@ -197,90 +243,33 @@ Options:
   -h, --help            Show help
 ```
 
-### Examples
+### Daemon Mode
 
 ```bash
-# Basic (auto-opens browser)
-claude-journal
-
-# Without auto-open
-claude-journal --no-open
-
-# Background with custom port
-claude-journal --daemon --port 9000
-
-# With auth (for remote access)
-claude-journal --daemon --auth admin:secret
-
-# Check status / stop
-claude-journal --status
-claude-journal --stop
+claude-journal --daemon        # Start in background
+claude-journal --status        # Running (PID 12345) at http://localhost:8086
+claude-journal --stop          # Stop the daemon
 ```
 
----
-
-## Daemon Mode
-
-Run Claude Journal in the background so it's always available — no terminal window needed.
-
-```bash
-# Start as background daemon
-claude-journal --daemon
-
-# Output:
-#   Claude Journal (daemon)
-#   PID:  12345
-#   URL:  http://localhost:8086
-#   Log:  /tmp/claude-journal.log
-#   Stop: claude-journal --stop
-```
-
-The daemon detaches from the terminal and keeps running after you close the shell. Use `--status` and `--stop` to manage it:
-
-```bash
-claude-journal --status    # Running (PID 12345) at http://localhost:8086
-claude-journal --stop      # Stopped (PID 12345)
-```
-
-If the requested port is busy, the daemon auto-increments and reports the actual port it bound to.
-
-### After a Reboot
-
-The daemon does not survive reboots. Just run `claude-journal` (or `claude-journal --daemon`) again — no reinstall needed. Your global install, settings, and all annotations are preserved.
-
-If you want Claude Journal to start automatically on login, use pm2:
+The daemon survives closing your terminal but not reboots. Just run `claude-journal` again after a reboot — no reinstall needed. For auto-start on login, use pm2:
 
 ```bash
 npm install -g pm2
-pm2 start claude-journal -- --no-open --port 8086
+pm2 start claude-journal -- --no-open
 pm2 save && pm2 startup
 ```
 
----
+### Remote Access
 
-## Remote Access
-
-If Claude Code runs on a remote server:
-
-**SSH tunnel (recommended):**
 ```bash
-# On server:
-claude-journal --daemon
-
-# On local machine:
+# SSH tunnel (recommended):
 ssh -L 8086:localhost:8086 user@server
-# Open http://localhost:8086
-```
 
-**VS Code Remote SSH:**
-Just run `claude-journal` in the VS Code terminal — ports auto-forward.
-
-**With auth (direct access):**
-```bash
-# On server:
+# Or with auth for direct access:
 claude-journal --daemon --auth user:pass --port 8086
-# Access directly at http://server:8086
 ```
+
+VS Code Remote SSH auto-forwards ports — just run `claude-journal` in the terminal.
 
 ---
 
@@ -288,28 +277,27 @@ claude-journal --daemon --auth user:pass --port 8086
 
 ```
 claude-journal/
-  server.js              Express + WebSocket server
-  bin/cli.js             CLI with daemon mode
+  server.js                Express + WebSocket server
+  bin/cli.js               CLI with daemon mode, Node 18+ check
+  providers/
+    codex.js               Codex provider (reads ~/.codex/)
   public/
-    index.html           Single-page app shell
-    style.css            Full stylesheet (dark + light themes)
-    sw.js                Service worker (PWA)
-    manifest.json        PWA manifest
+    index.html             SPA shell
+    style.css              Dark + light themes
+    sw.js                  Service worker (PWA)
     modules/
-      main.js            App init, routing, events
-      state.js           Shared state, utilities, icons
-      sidebar.js         Sidebar, session list, context menu
-      messages.js        Message rendering, tool blocks, editing
-      rail.js            Conversation minimap
-      notes.js           Notes panel
-      search.js          Global search palette
-      analytics.js       Analytics dashboard + charts
-      toast.js           Toast notifications
-      router.js          Hash-based routing
-  tray/                  Electron system tray app (optional)
-  launchers/             Double-click launchers (macOS/Windows/Linux)
-  tests/                 Playwright E2E tests
-  Dockerfile             Docker support
+      main.js              App init, routing, events, keyboard shortcuts
+      state.js             Shared state, utilities, settings, diff algorithm
+      sidebar.js           Sidebar, session list, context menu, bulk ops
+      messages.js           Message rendering, tool blocks, timeline, tags
+      analytics.js         Analytics dashboard, project dashboard
+      search.js            Global search with filters
+      notes.js             Notes panel
+      rail.js              Conversation minimap
+      router.js            Hash-based routing
+      toast.js             Toast notifications
+  tray/                    Electron system tray app (optional)
+  tests/                   Playwright E2E tests
 ```
 
 **No build step.** Pure vanilla JS with ES modules. No React, no bundler, no transpiler.
@@ -318,61 +306,32 @@ claude-journal/
 
 ## How It Works
 
-Claude Code stores conversation history as JSONL files in `~/.claude/projects/`. Claude Journal reads these files directly:
-
-1. **Server** scans the projects directory, parses JSONL, computes stats (cached by mtime)
-2. **WebSocket** watches the active session file with `chokidar` for live updates
-3. **Annotations** (favorites, highlights, comments) are stored separately in `annotations/` as JSON
-4. **Search index** is built in-memory from all JSONL files, cached for 60 seconds
-5. **Analytics** are computed on-the-fly from message usage data with cost estimation
-
-All file writes (edits, renames, deletes) use atomic write (temp file + rename) to prevent corruption from concurrent Claude Code access.
+1. **Server** scans `~/.claude/projects/` (JSONL) and `~/.codex/sessions/` (JSONL + SQLite) for conversations
+2. **Codex provider** normalizes Codex message format (function_call, reasoning, etc.) into the same structure as Claude Code
+3. **WebSocket** watches the active session file with `chokidar` for live updates
+4. **Annotations** are stored separately in `annotations/` as JSON — never modifies conversation files unless you explicitly edit/delete
+5. **Analytics** computed on-the-fly from token usage data with cost estimation (input + output tokens only, no cache charges)
+6. **All edits** (message edits, renames, deletes) use atomic writes to prevent corruption from concurrent access
 
 ---
 
 ## Troubleshooting
 
-### "Port already in use"
-
-Claude Journal auto-tries the next 10 ports (8086–8095). If all are busy, specify a different port:
-```bash
-claude-journal --port 9000
-```
-
-### "Projects directory not found"
-
-Claude Journal looks for `~/.claude/projects` by default. If your projects are elsewhere:
-```bash
-claude-journal --dir /path/to/.claude/projects
-```
-Or change it in Settings (gear icon) inside the app.
-
-### "Node.js 18 or later required"
-
-Claude Journal requires Node.js 18+. Check your version with `node -v` and upgrade at [nodejs.org](https://nodejs.org).
-
-### macOS "damaged" app (Electron tray)
-
-Unsigned Electron apps are blocked by macOS Gatekeeper. Run:
-```bash
-xattr -cr "Claude Journal.app"
-```
-
-### Docker: no sessions visible
-
-Make sure you mount your Claude projects directory:
-```bash
-docker run -v ~/.claude/projects:/data -p 8086:8086 claude-journal
-```
+| Problem | Solution |
+|---------|----------|
+| Port already in use | Auto-tries next 10 ports, or use `--port 9000` |
+| Projects directory not found | Set in Settings or use `--dir /path/to/.claude/projects` |
+| Node.js too old | Requires Node 18+. Check with `node -v` |
+| macOS "damaged" app | Run `xattr -cr "Claude Journal.app"` (unsigned Electron app) |
+| Docker: no sessions | Mount your projects: `-v ~/.claude/projects:/data` |
+| Codex sessions not showing | Codex stores data in `~/.codex/`. Ensure you have sessions there |
 
 ---
 
 ## Requirements
 
 - **Node.js** 18 or later
-- **Claude Code** conversations in `~/.claude/projects/` (created automatically when you use Claude Code)
-
----
+- **Claude Code** conversations in `~/.claude/projects/` and/or **Codex** sessions in `~/.codex/sessions/`
 
 ## License
 

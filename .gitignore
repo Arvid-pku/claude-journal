@@ -3,5 +3,5 @@ annotations/
 settings.json
 *.tmp.*
 test-results/
-*.png
+# *.png
 dist/
