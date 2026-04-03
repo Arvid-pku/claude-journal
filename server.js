@@ -1035,30 +1035,45 @@ wss.on('connection', (ws) => {
     if (msg.type === 'chat') {
       if (chatProc) { ws.send(JSON.stringify({ type: 'chat_error', error: 'A conversation is already in progress' })); return; }
       const sessionId = msg.session;
-      const userMessage = msg.message;
-      if (!sessionId || !userMessage) return;
+      let userMessage = msg.message;
+      const chatMode = msg.mode || 'default'; // 'default' or 'plan'
+      const isNewSession = !!msg.newSession;
+      if (!userMessage) return;
+      if (!isNewSession && !sessionId) return;
 
       const isCodex = msg.project?.startsWith('codex__');
       let cliPath, args, cwd;
 
+      // Plan mode is handled via --permission-mode flag below
+
+      // Resolve cwd for both Codex and Claude
+      cwd = process.cwd();
+
       if (isCodex) {
-        // Codex: codex exec resume <session-id> "message" --json
         cliPath = process.env.CODEX_PATH || 'codex';
-        args = ['exec', 'resume', sessionId, userMessage, '--json'];
-        // Resolve cwd from SQLite
-        cwd = process.cwd();
+        if (isNewSession) {
+          args = ['exec', userMessage, '--json'];
+        } else {
+          args = ['exec', 'resume', sessionId, userMessage, '--json'];
+        }
         try {
           const threads = codex.isAvailable() ? require('./providers/codex').listProjects() : [];
           const project = threads.find(p => p.id === msg.project);
           if (project?.projectPath && fs.existsSync(project.projectPath)) cwd = project.projectPath;
         } catch {}
       } else {
-        // Claude Code: claude --resume <session-id> --print --output-format stream-json --verbose -p "message"
         cliPath = process.env.CLAUDE_PATH || 'claude';
-        args = ['--resume', sessionId, '--print', '--output-format', 'stream-json', '--verbose', '-p', userMessage];
-        // Resolve cwd
+        if (isNewSession) {
+          args = ['--print', '--output-format', 'stream-json', '--verbose'];
+        } else {
+          args = ['--resume', sessionId, '--print', '--output-format', 'stream-json', '--verbose'];
+        }
+        // Real CLI flags for model, effort, and permission mode
+        if (msg.model) args.push('--model', msg.model);
+        if (msg.effort) args.push('--effort', msg.effort);
+        if (chatMode === 'plan') args.push('--permission-mode', 'plan');
+        args.push('-p', userMessage);
         const projectDir = path.join(PROJECTS_DIR, msg.project);
-        cwd = process.cwd();
         try {
           const indexPath = path.join(projectDir, 'sessions-index.json');
           if (fs.existsSync(indexPath)) {
@@ -1081,6 +1096,9 @@ wss.on('connection', (ws) => {
       });
 
       let buffer = '';
+      let stderrBuf = '';
+      let gotResult = false;
+
       chatProc.stdout.on('data', (data) => {
         buffer += data.toString();
         const lines = buffer.split('\n');
@@ -1091,17 +1109,21 @@ wss.on('connection', (ws) => {
             const parsed = JSON.parse(line);
             if (ws.readyState !== 1) continue;
             if (isCodex) {
-              // Codex events: item.completed (agent message), turn.completed (done)
               if (parsed.type === 'item.completed' && parsed.item?.type === 'agent_message') {
                 ws.send(JSON.stringify({ type: 'chat_delta', data: parsed }));
               } else if (parsed.type === 'turn.completed') {
+                gotResult = true;
                 ws.send(JSON.stringify({ type: 'chat_done', data: parsed }));
               }
             } else {
-              // Claude events
               if (parsed.type === 'assistant') {
                 ws.send(JSON.stringify({ type: 'chat_delta', data: parsed }));
               } else if (parsed.type === 'result') {
+                gotResult = true;
+                // Send back session_id for new sessions
+                if (parsed.session_id) {
+                  ws.send(JSON.stringify({ type: 'chat_session', sessionId: parsed.session_id, project: msg.project }));
+                }
                 if (parsed.is_error || parsed.subtype === 'error_during_execution') {
                   ws.send(JSON.stringify({ type: 'chat_error', error: parsed.result?.slice(0, 500) || 'Error' }));
                 } else {
@@ -1113,16 +1135,23 @@ wss.on('connection', (ws) => {
         }
       });
 
+      // Buffer stderr — only report as error on non-zero exit when no result was received
       chatProc.stderr.on('data', (data) => {
-        const errMsg = data.toString().trim();
-        if (errMsg && ws.readyState === 1) {
-          ws.send(JSON.stringify({ type: 'chat_error', error: errMsg.slice(0, 500) }));
-        }
+        stderrBuf += data.toString();
       });
 
       chatProc.on('close', (code) => {
         chatProc = null;
-        if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'chat_end', code }));
+        if (ws.readyState === 1) {
+          if (code !== 0 && !gotResult && stderrBuf.trim()) {
+            // Strip ANSI escape codes for cleaner error messages
+            const clean = stderrBuf.replace(/\x1b\[[0-9;]*[a-zA-Z]/g, '').trim();
+            if (clean) {
+              ws.send(JSON.stringify({ type: 'chat_error', error: clean.slice(0, 500) }));
+            }
+          }
+          ws.send(JSON.stringify({ type: 'chat_end', code }));
+        }
       });
 
       chatProc.on('error', (err) => {
@@ -1137,6 +1166,7 @@ wss.on('connection', (ws) => {
     if (msg.type === 'chat_cancel') {
       if (chatProc) { chatProc.kill('SIGTERM'); chatProc = null; }
     }
+
   });
   ws.on('close', () => {
     if (watcher) { watcher.close(); watcher = null; }

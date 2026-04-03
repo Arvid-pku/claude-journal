@@ -103,6 +103,7 @@ function clearSessionContext() {
   document.getElementById('notes-panel').classList.add('hidden');
   updateSidebarActive();
   updateChatBar();
+  if (state.newSessionPending) cancelNewSession();
 }
 
 function goHome() {
@@ -242,6 +243,14 @@ function connectWS() {
     if (msg.type === 'chat_delta') {
       // Live update will pick up JSONL changes — just scroll
       scrollToBottom();
+    }
+    if (msg.type === 'chat_session') {
+      // New session was created — load it
+      if (msg.sessionId && msg.project) {
+        delete state.sessions[msg.project];
+        loadSession(msg.project, msg.sessionId);
+        toast('New session started', 'success', 2000);
+      }
     }
     if (msg.type === 'chat_done' || msg.type === 'chat_end') {
       setChatState('ready');
@@ -582,13 +591,194 @@ function exportSession() {
   toast('Exported as Markdown', 'success', 4000);
 }
 
+// ── Slash Commands ──────────────────────────────────────────────────────
+
+// ── Model Picker ───────────────────────────────────────────────────────
+
+function showModelPicker() {
+  const picker = document.getElementById('model-picker');
+  picker.classList.remove('hidden');
+  picker.querySelectorAll('.model-option').forEach(opt => {
+    opt.classList.toggle('selected', opt.dataset.model === (state.chatModel || ''));
+  });
+}
+
+function hideModelPicker() {
+  document.getElementById('model-picker')?.classList.add('hidden');
+}
+
+function selectModel(modelId) {
+  state.chatModel = modelId;
+  hideModelPicker();
+  const MODEL_NAMES = { 'claude-opus-4-0-20250514': 'Opus 4', 'claude-sonnet-4-20250514': 'Sonnet 4', 'claude-haiku-4-20250506': 'Haiku 4' };
+  return `Model set to **${MODEL_NAMES[modelId] || modelId}**`;
+}
+
+// ── Slash Commands ─────────────────────────────────────────────────────
+// Two kinds of commands:
+//   1. Claude Journal UI commands — things that control this web UI
+//   2. Claude Code CLI commands — forwarded to the server which runs the
+//      actual `claude` CLI and returns real output
+//
+// We do NOT reimplement Claude Code commands ourselves.
+
+// Commands handled locally — either Claude Journal UI or real CLI flags
+const LOCAL_COMMANDS = {
+  // Claude Journal UI
+  '/theme':    () => { const t = document.documentElement.dataset.theme === 'dark' ? 'light' : 'dark'; document.documentElement.dataset.theme = t; localStorage.setItem('theme', t); return null; },
+  '/compact':  () => { state.settings.compactMode = !state.settings.compactMode; applySettings(); return null; },
+  '/settings': () => { document.getElementById('btn-settings').click(); return null; },
+  '/config':   () => { document.getElementById('btn-settings').click(); return null; },
+  '/export':   () => { document.getElementById('btn-export').click(); return null; },
+  '/clear':    () => { startNewSession(); return null; },
+  '/reset':    () => { startNewSession(); return null; },
+  '/new':      () => { startNewSession(); return null; },
+
+  // Real CLI flags — these change what we send to the claude process
+  '/model':  () => { showModelPicker(); return null; },
+  '/effort': (args) => {
+    const level = args.trim().toLowerCase();
+    const valid = ['low', 'medium', 'high', 'max', 'auto'];
+    if (!level || !valid.includes(level)) {
+      return `Usage: \`/effort <${valid.join('|')}>\`\nCurrent: **${state.chatEffort || 'auto'}**`;
+    }
+    state.chatEffort = level === 'auto' ? null : level;
+    return `Effort: **${level}**`;
+  },
+  '/plan': () => { state.chatMode = 'plan'; updateModeDisplay(); return null; },
+
+  '/help': () => {
+    return '**Commands**\n\n' +
+      '| Command | |\n|---|---|\n' +
+      '| `/model` | Select model (sends `--model` to CLI) |\n' +
+      '| `/effort <level>` | low / medium / high / max / auto (sends `--effort`) |\n' +
+      '| `/plan` | Plan mode (sends `--permission-mode plan`) |\n' +
+      '| `/clear`, `/reset`, `/new` | New session |\n' +
+      '| `/theme` | Toggle dark/light |\n' +
+      '| `/compact` | Toggle compact display |\n' +
+      '| `/settings` | Open settings |\n' +
+      '| `/export` | Export session |\n\n' +
+      'Commands like `/cost`, `/usage`, `/status` are interactive-only — ' +
+      'run them in your Claude Code terminal.\n\n' +
+      '**Shift+Tab** toggles plan / accept-edits mode';
+  },
+};
+
+// Commands that require interactive Claude Code CLI
+// (slash commands don't work via --print, so we can't forward them)
+const INTERACTIVE_ONLY = new Set([
+  '/cost', '/usage', '/status', '/context', '/doctor',
+  '/fast', '/diff', '/copy', '/rename', '/branch', '/fork',
+  '/resume', '/continue', '/rewind', '/checkpoint', '/memory',
+  '/color', '/vim', '/voice', '/permissions', '/allowed-tools',
+  '/login', '/logout', '/exit', '/quit',
+  '/desktop', '/app', '/ide', '/chrome',
+  '/remote-control', '/rc', '/remote-env',
+  '/sandbox', '/terminal-setup', '/keybindings', '/statusline',
+  '/install-github-app', '/install-slack-app',
+  '/upgrade', '/add-dir',
+  '/mcp', '/hooks', '/plugin', '/reload-plugins',
+  '/agents', '/init', '/powerup',
+  '/schedule', '/loop', '/tasks', '/bashes',
+  '/pr-comments', '/security-review',
+  '/stickers', '/passes', '/mobile', '/ios', '/android',
+  '/feedback', '/bug', '/btw',
+  '/extra-usage', '/privacy-settings',
+  '/insights', '/release-notes', '/skills',
+]);
+
+function appendChatSystemMessage(content) {
+  const container = document.getElementById('messages');
+  const div = document.createElement('div');
+  div.className = 'message assistant-msg chat-system-msg';
+  div.innerHTML = `<div class="message-inner"><div class="msg-header"><span class="msg-role system-role">System</span></div><div class="msg-body">${renderMarkdown(content)}</div></div>`;
+  container.appendChild(div);
+  scrollToBottom();
+}
+
+// ── Chat Mode ──────────────────────────────────────────────────────────
+
+function toggleChatMode() {
+  state.chatMode = state.chatMode === 'plan' ? 'default' : 'plan';
+  updateModeDisplay();
+  toast(state.chatMode === 'plan' ? 'Plan mode' : 'Accept Edits mode', 'info', 2000);
+}
+
+function updateModeDisplay() {
+  const btn = document.getElementById('chat-mode-toggle');
+  if (!btn) return;
+  const isPlan = state.chatMode === 'plan';
+  btn.querySelector('.mode-label').textContent = isPlan ? 'Plan' : 'Accept Edits';
+  btn.classList.toggle('mode-plan', isPlan);
+}
+
+// ── New Session ────────────────────────────────────────────────────────
+
+function startNewSession() {
+  if (!state.currentProject) { toast('Select a project first', 'error'); return; }
+  state.newSessionPending = true;
+  const input = document.getElementById('chat-input');
+  input.placeholder = 'Type your first message for the new session...';
+  input.focus();
+  document.getElementById('chat-new-session')?.classList.add('active');
+}
+
+function cancelNewSession() {
+  state.newSessionPending = false;
+  document.getElementById('chat-new-session')?.classList.remove('active');
+  updateChatBar();
+}
+
 // ── Chat with Claude Code ───────────────────────────────────────────────
 
 function sendChatMessage() {
   const input = document.getElementById('chat-input');
   const message = input.value.trim();
-  if (!message || !state.currentProject || !state.currentSession) return;
+  if (!message) return;
+
+  // Handle slash commands
+  if (message.startsWith('/')) {
+    const parts = message.match(/^(\/\S+)\s*(.*)/s);
+    const cmd = parts ? parts[1].toLowerCase() : message.toLowerCase();
+    const args = parts ? parts[2] : '';
+
+    // 1. Local UI commands handled entirely in the browser
+    const localHandler = LOCAL_COMMANDS[cmd];
+    if (localHandler) {
+      const container = document.getElementById('messages');
+      const userDiv = document.createElement('div');
+      userDiv.className = 'message user-msg chat-pending chat-cmd';
+      userDiv.innerHTML = `<div class="message-inner"><div class="msg-header"><span class="msg-role">You</span></div><div class="msg-body"><code>${escapeHtml(message)}</code></div></div>`;
+      container.appendChild(userDiv);
+      const result = localHandler(args);
+      if (result) appendChatSystemMessage(result);
+      input.value = '';
+      input.style.height = 'auto';
+      scrollToBottom();
+      return;
+    }
+
+    // 2. Known interactive-only commands → show message
+    if (INTERACTIVE_ONLY.has(cmd)) {
+      const container = document.getElementById('messages');
+      const userDiv = document.createElement('div');
+      userDiv.className = 'message user-msg chat-pending chat-cmd';
+      userDiv.innerHTML = `<div class="message-inner"><div class="msg-header"><span class="msg-role">You</span></div><div class="msg-body"><code>${escapeHtml(message)}</code></div></div>`;
+      container.appendChild(userDiv);
+      appendChatSystemMessage(`\`${escapeHtml(cmd)}\` requires the interactive Claude Code CLI.\nRun \`claude\` in your terminal to use this command.`);
+      input.value = '';
+      input.style.height = 'auto';
+      return;
+    }
+
+    // 3. Unknown /commands — pass through as a regular message to Claude
+  }
+
+  if (!state.currentProject) return;
   if (!state.ws || state.ws.readyState !== 1) { toast('Not connected', 'error'); return; }
+
+  // Need a session unless starting new
+  if (!state.newSessionPending && !state.currentSession) return;
 
   // Optimistic: show user message immediately
   const container = document.getElementById('messages');
@@ -598,12 +788,23 @@ function sendChatMessage() {
   container.appendChild(userDiv);
   scrollToBottom();
 
-  state.ws.send(JSON.stringify({
+  const payload = {
     type: 'chat',
     project: state.currentProject,
-    session: state.currentSession,
     message,
-  }));
+    mode: state.chatMode || 'default',
+    model: state.chatModel || undefined,
+    effort: state.chatEffort || undefined,
+  };
+
+  if (state.newSessionPending) {
+    payload.newSession = true;
+    cancelNewSession();
+  } else {
+    payload.session = state.currentSession;
+  }
+
+  state.ws.send(JSON.stringify(payload));
 
   input.value = '';
   input.style.height = 'auto';
@@ -639,10 +840,13 @@ function setChatState(s) {
 
 function updateChatBar() {
   const bar = document.getElementById('chat-bar');
-  bar.classList.toggle('hidden', !state.currentSession);
+  // Show chat bar if we have a session OR a project (for new session)
+  bar.classList.toggle('hidden', !state.currentSession && !state.currentProject);
   // Update placeholder based on provider
   const input = document.getElementById('chat-input');
-  if (state.currentProject?.startsWith('codex__')) {
+  if (state.newSessionPending) {
+    input.placeholder = 'Type your first message for the new session...';
+  } else if (state.currentProject?.startsWith('codex__')) {
     input.placeholder = 'Reply to Codex...';
   } else {
     input.placeholder = 'Reply...';
@@ -934,11 +1138,33 @@ function setupEvents() {
   document.getElementById('chat-cancel').addEventListener('click', cancelChat);
   document.getElementById('chat-input').addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMessage(); }
+    if (e.key === 'Escape' && state.newSessionPending) { e.preventDefault(); cancelNewSession(); }
+    // Shift+Tab to toggle mode
+    if (e.key === 'Tab' && e.shiftKey) { e.preventDefault(); toggleChatMode(); }
   });
-  // Auto-resize chat input
+  // Auto-resize chat input and sync padding
   document.getElementById('chat-input').addEventListener('input', (e) => {
     e.target.style.height = 'auto';
     e.target.style.height = Math.min(150, e.target.scrollHeight) + 'px';
+  });
+  // Mode toggle button
+  document.getElementById('chat-mode-toggle').addEventListener('click', toggleChatMode);
+  // New session button
+  document.getElementById('chat-new-session').addEventListener('click', () => {
+    if (state.newSessionPending) cancelNewSession();
+    else startNewSession();
+  });
+  // Model picker
+  document.getElementById('model-picker').addEventListener('click', (e) => {
+    const opt = e.target.closest('.model-option');
+    if (!opt) return;
+    const result = selectModel(opt.dataset.model);
+    appendChatSystemMessage(result);
+  });
+  // Close model picker on outside click
+  document.addEventListener('click', (e) => {
+    const picker = document.getElementById('model-picker');
+    if (!picker.classList.contains('hidden') && !picker.contains(e.target)) hideModelPicker();
   });
 
   // Sidebar menu items
@@ -995,7 +1221,7 @@ function setupEvents() {
     if (e.key === 'Escape') {
       // Exit bulk mode
       if (state._bulkMode) { toggleBulkMode(false); return; }
-      closeSearch(); hideContextMenu(); document.getElementById('highlight-picker').classList.add('hidden');
+      closeSearch(); hideContextMenu(); hideModelPicker(); document.getElementById('highlight-picker').classList.add('hidden');
       ['note-modal', 'move-modal', 'delete-modal', 'memory-modal', 'settings-modal', 'confirm-modal', 'shortcuts-modal'].forEach(id => hideModal(id));
       const box = document.getElementById('search-box');
       if (!box.classList.contains('hidden')) { box.classList.add('hidden'); state.searchQuery = ''; document.getElementById('message-search').value = ''; renderMessages(); }
@@ -1122,6 +1348,11 @@ function startTips() {
 
   // Load settings
   try { state.settings = { ...DEFAULTS, ...(await api('/api/settings')) }; applySettings(); } catch {}
+
+  state.chatMode = 'default';
+  state.chatModel = null;
+  state.chatEffort = null;   // null = auto
+  state.newSessionPending = false;
 
   setupEvents();
   connectWS();

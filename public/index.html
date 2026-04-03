@@ -183,11 +183,32 @@
         </div>
         <div id="notes-panel" class="hidden"></div>
         <div id="conv-rail"></div>
+        <button id="scroll-bottom-btn" class="scroll-bottom-btn hidden" title="Scroll to bottom">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>
+        </button>
       </div>
-      <button id="scroll-bottom-btn" class="scroll-bottom-btn hidden" title="Scroll to bottom">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 5v14"/><path d="m19 12-7 7-7-7"/></svg>
-      </button>
       <div id="chat-bar" class="hidden">
+        <div id="model-picker" class="model-picker hidden">
+          <div class="model-picker-title">Select model</div>
+          <button class="model-option" data-model="claude-opus-4-0-20250514">
+            <div><span class="model-option-name">Opus 4</span> <span class="model-option-desc">Most capable</span></div>
+            <span class="model-option-price">$15/$75</span>
+          </button>
+          <button class="model-option selected" data-model="claude-sonnet-4-20250514">
+            <div><span class="model-option-name">Sonnet 4</span> <span class="model-option-desc">Balanced</span></div>
+            <span class="model-option-price">$3/$15</span>
+          </button>
+          <button class="model-option" data-model="claude-haiku-4-20250506">
+            <div><span class="model-option-name">Haiku 4</span> <span class="model-option-desc">Fastest</span></div>
+            <span class="model-option-price">$0.8/$4</span>
+          </button>
+        </div>
+        <div class="chat-bar-controls">
+          <button id="chat-mode-toggle" class="chat-mode-btn" title="Switch mode (Shift+Tab)">
+            <span class="mode-label">Accept Edits</span>
+          </button>
+          <button id="chat-new-session" class="chat-new-btn" title="New session">+ New</button>
+        </div>
         <div class="chat-input-wrap">
           <textarea id="chat-input" placeholder="Reply..." rows="1" autocomplete="off"></textarea>
           <span id="chat-status-dot" class="chat-dot hidden"></span>
