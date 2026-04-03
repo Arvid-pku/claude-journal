@@ -16,6 +16,20 @@ export const DEFAULTS = {
   sessionSort: 'newest',       // newest | oldest | messages | cost | alpha
   autoScrollLive: true,
   messageWidth: 900,           // px, max message width
+  // Features
+  showCodeCopyBtn: true,
+  enableCollapse: false,
+  showDiffView: true,
+  groupToolCalls: true,
+  showSessionTimeline: true,
+  showAvatars: true,
+  showSkeletons: true,
+  smoothScrollHighlight: true,
+  enableTags: false,
+  enableShareHtml: true,
+  advancedSearch: true,
+  enableBulkOps: false,
+  enableProjectDashboard: true,
 };
 
 export const state = {
@@ -37,6 +51,10 @@ export const state = {
   subagentMsgs: {},
   memoryCache: {},
   projectsEmpty: null,
+  messageFilters: {
+    human: true, assistant: true, tool: true, thinking: true, subagent: true,
+    'tool-read': true, 'tool-edit': true, 'tool-bash': true, 'tool-search': true, 'tool-web': true, 'tool-other': true,
+  },
   settings: { ...DEFAULTS },
 };
 
@@ -57,6 +75,8 @@ export let afterRender = () => {};
 export function setAfterRender(fn) { afterRender = fn; }
 export let onSessionSelect = null;
 export function setOnSessionSelect(fn) { onSessionSelect = fn; }
+export let onAnnotationChange = () => {};
+export function setOnAnnotationChange(fn) { onAnnotationChange = fn; }
 
 // ── SVG Icons ───────────────────────────────────────────────────────────
 
@@ -142,3 +162,24 @@ export function shortenPath(p) {
 
 export function showModal(id) { document.getElementById(id).classList.remove('hidden'); }
 export function hideModal(id) { document.getElementById(id).classList.add('hidden'); }
+
+// ── Line diff ──────────────────────────────────────────────────────────
+
+export function computeLineDiff(oldText, newText) {
+  const oldLines = oldText.split('\n'), newLines = newText.split('\n');
+  // Simple LCS-based line diff
+  const n = oldLines.length, m = newLines.length;
+  const max = n + m;
+  if (max > 2000) return [{ type: 'remove', lines: oldLines }, { type: 'add', lines: newLines }]; // too large
+  const dp = Array.from({ length: n + 1 }, () => new Uint16Array(m + 1));
+  for (let i = n - 1; i >= 0; i--) for (let j = m - 1; j >= 0; j--)
+    dp[i][j] = oldLines[i] === newLines[j] ? dp[i + 1][j + 1] + 1 : Math.max(dp[i + 1][j], dp[i][j + 1]);
+  const result = [];
+  let i = 0, j = 0;
+  while (i < n || j < m) {
+    if (i < n && j < m && oldLines[i] === newLines[j]) { result.push({ type: 'same', text: oldLines[i] }); i++; j++; }
+    else if (j < m && (i >= n || dp[i][j + 1] >= dp[i + 1][j])) { result.push({ type: 'add', text: newLines[j] }); j++; }
+    else { result.push({ type: 'remove', text: oldLines[i] }); i++; }
+  }
+  return result;
+}

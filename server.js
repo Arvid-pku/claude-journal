@@ -47,10 +47,14 @@ function authMiddleware(req, res, next) {
 
 // ── Pricing (per 1M tokens) ────────────────────────────────────────────────
 
+// Pricing per 1M tokens (Anthropic API rates, input + output only)
+// Cache tokens (read & create) are excluded — they represent internal prompt caching
+// optimizations. Claude Code users pay via subscription, not per cached token.
+// The cost shown reflects equivalent API usage for new input + output tokens.
 const PRICING = {
-  'claude-opus-4': { input: 15, output: 75, cacheRead: 1.5, cacheCreate: 18.75 },
-  'claude-sonnet-4': { input: 3, output: 15, cacheRead: 0.3, cacheCreate: 3.75 },
-  'claude-haiku-4': { input: 0.8, output: 4, cacheRead: 0.08, cacheCreate: 1 },
+  'claude-opus-4': { input: 15, output: 75 },
+  'claude-sonnet-4': { input: 3, output: 15 },
+  'claude-haiku-4': { input: 0.8, output: 4 },
 };
 
 function getModelPricing(model) {
@@ -65,9 +69,7 @@ function messageCost(model, usage) {
   const p = getModelPricing(model);
   if (!p || !usage) return 0;
   return ((usage.input_tokens || 0) * p.input
-    + (usage.output_tokens || 0) * p.output
-    + (usage.cache_read_input_tokens || 0) * p.cacheRead
-    + (usage.cache_creation_input_tokens || 0) * p.cacheCreate) / 1_000_000;
+    + (usage.output_tokens || 0) * p.output) / 1_000_000;
 }
 
 // ── Atomic write helper ─────────────────────────────────────────────────────
@@ -377,8 +379,10 @@ function buildSearchIndex() {
               text = m.message.content;
             else if (m.type === 'assistant' && Array.isArray(m.message?.content))
               text = m.message.content.filter(b => b.type === 'text').map(b => b.text).join('\n');
+            const tools = m.type === 'assistant' && Array.isArray(m.message?.content)
+              ? m.message.content.filter(b => b.type === 'tool_use').map(b => b.name) : undefined;
             if (text && text.length > 3)
-              entries.push({ projectId: pd.name, sessionId, sessionName, uuid: m.uuid, role: m.type, text, ts: m.timestamp });
+              entries.push({ projectId: pd.name, sessionId, sessionName, uuid: m.uuid, role: m.type, text, ts: m.timestamp, tools });
           }
         } catch {}
       }
@@ -393,9 +397,18 @@ app.get('/api/search', (req, res) => {
   const q = (req.query.q || '').toLowerCase().trim();
   if (!q || q.length < 2) return res.json([]);
   const limit = Math.min(parseInt(req.query.limit) || 50, 200);
+  const filterRole = req.query.role || '';
+  const filterTool = req.query.tool || '';
+  const filterFrom = req.query.from || '';
+  const filterTo = req.query.to || '';
   const index = buildSearchIndex();
   const results = [];
   for (const e of index) {
+    // Apply filters
+    if (filterRole && e.role !== filterRole) continue;
+    if (filterTool && !e.tools?.includes(filterTool)) continue;
+    if (filterFrom && e.ts && e.ts.slice(0, 10) < filterFrom) continue;
+    if (filterTo && e.ts && e.ts.slice(0, 10) > filterTo) continue;
     const idx = e.text.toLowerCase().indexOf(q);
     if (idx === -1) continue;
     const start = Math.max(0, idx - 80), end = Math.min(e.text.length, idx + q.length + 80);
@@ -558,6 +571,26 @@ app.get('/api/bookmarks', (req, res) => {
           const entry = { project, session, sessionName, uuid, role, text: text.slice(0, 200), ts };
           if (type === 'highlights') entry.color = anno.highlight;
           results.push(entry);
+        }
+      } else if (type === 'tags') {
+        for (const [uuid, anno] of Object.entries(annotations)) {
+          if (uuid === '_meta' || !anno.tags?.length) continue;
+          let text = '', role = '';
+          const fp = path.join(PROJECTS_DIR, project, `${session}.jsonl`);
+          if (fs.existsSync(fp)) {
+            for (const line of fs.readFileSync(fp, 'utf8').split('\n')) {
+              if (!line) continue;
+              try {
+                const m = JSON.parse(line);
+                if (m.uuid !== uuid) continue;
+                role = m.type === 'user' ? 'user' : 'assistant';
+                if (m.type === 'user' && typeof m.message?.content === 'string') text = m.message.content;
+                else if (m.type === 'assistant' && Array.isArray(m.message?.content)) text = m.message.content.filter(b => b.type === 'text').map(b => b.text).join('\n');
+                break;
+              } catch {}
+            }
+          }
+          results.push({ project, session, sessionName, uuid, role, tags: anno.tags, text: (text || '').slice(0, 200) });
         }
       } else if (type === 'notes') {
         // Per-message comments
@@ -754,6 +787,39 @@ app.post('/api/sessions/:project/:session/move', (req, res) => {
     const dstAnno = path.join(ANNOTATIONS_DIR, `${targetProject}__${req.params.session}.json`);
     if (fs.existsSync(srcAnno)) { fs.copyFileSync(srcAnno, dstAnno); fs.unlinkSync(srcAnno); }
     res.json({ ok: true });
+  } catch (err) { res.status(500).json({ error: err.message }); }
+});
+
+// ── Batch Operations ───────────────────────────────────────────────────
+
+app.post('/api/sessions/batch', (req, res) => {
+  try {
+    const { action, sessions, targetProject } = req.body;
+    if (!sessions?.length) return res.status(400).json({ error: 'No sessions specified' });
+    const results = [];
+    for (const { project, session } of sessions) {
+      const fp = path.join(PROJECTS_DIR, project, `${session}.jsonl`);
+      if (!fs.existsSync(fp)) { results.push({ session, error: 'Not found' }); continue; }
+      try {
+        if (action === 'delete') {
+          fs.unlinkSync(fp);
+          const dirPath = path.join(PROJECTS_DIR, project, session);
+          if (fs.existsSync(dirPath)) fs.rmSync(dirPath, { recursive: true, force: true });
+          const annoPath = path.join(ANNOTATIONS_DIR, `${project}__${session}.json`);
+          if (fs.existsSync(annoPath)) fs.unlinkSync(annoPath);
+          saveName(project, session, null);
+          results.push({ session, ok: true });
+        } else if (action === 'move' && targetProject) {
+          const dstDir = path.join(PROJECTS_DIR, targetProject);
+          const dstFile = path.join(dstDir, `${session}.jsonl`);
+          if (fs.existsSync(dstFile)) { results.push({ session, error: 'Already exists in target' }); continue; }
+          fs.copyFileSync(fp, dstFile);
+          fs.unlinkSync(fp);
+          results.push({ session, ok: true });
+        }
+      } catch (e) { results.push({ session, error: e.message }); }
+    }
+    res.json({ results });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 

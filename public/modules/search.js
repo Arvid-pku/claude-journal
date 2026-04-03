@@ -1,4 +1,4 @@
-import { api, escapeHtml, shortenPath, formatTime } from './state.js';
+import { state, api, escapeHtml, shortenPath, formatTime } from './state.js';
 import { navigate } from './router.js';
 
 let debounceTimer = null;
@@ -12,6 +12,9 @@ export function openSearch(initialQuery = '') {
   const input = document.getElementById('global-search-input');
   input.value = initialQuery;
   input.focus();
+  // Show/hide advanced filters based on setting
+  const filters = document.getElementById('search-filters');
+  if (filters) filters.classList.toggle('hidden', !state.settings.advancedSearch);
   if (initialQuery) doSearch(initialQuery);
 }
 
@@ -26,6 +29,11 @@ export function setupSearch() {
   input.addEventListener('input', () => {
     clearTimeout(debounceTimer);
     debounceTimer = setTimeout(() => doSearch(input.value), 250);
+  });
+
+  // Advanced filter changes trigger search
+  document.querySelectorAll('#search-filters select, #search-filters input').forEach(el => {
+    el.addEventListener('change', () => doSearch(input.value));
   });
 
   input.addEventListener('keydown', (e) => {
@@ -56,8 +64,21 @@ async function doSearch(query) {
 
   if (q.length < 2) { results.innerHTML = '<div class="search-empty">Type at least 2 characters</div>'; count.textContent = ''; return; }
 
+  // Build query params with advanced filters
+  const params = new URLSearchParams({ q, limit: 50 });
+  if (state.settings.advancedSearch) {
+    const role = document.getElementById('search-filter-role')?.value;
+    const tool = document.getElementById('search-filter-tool')?.value;
+    const from = document.getElementById('search-filter-from')?.value;
+    const to = document.getElementById('search-filter-to')?.value;
+    if (role) params.set('role', role);
+    if (tool) params.set('tool', tool);
+    if (from) params.set('from', from);
+    if (to) params.set('to', to);
+  }
+
   try {
-    const data = await api(`/api/search?q=${encodeURIComponent(q)}&limit=50`);
+    const data = await api(`/api/search?${params}`);
     count.textContent = `${data.length} result${data.length !== 1 ? 's' : ''}`;
 
     if (!data.length) { results.innerHTML = '<div class="search-empty">No results found</div>'; return; }

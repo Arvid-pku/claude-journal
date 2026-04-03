@@ -75,10 +75,12 @@ export function renderNotesPanel() {
 }
 
 async function saveSessionNote(value) {
-  await apiPost(
-    `/api/annotations/${encodeURIComponent(state.currentProject)}/${encodeURIComponent(state.currentSession)}`,
-    { uuid: '_meta', key: 'sessionNote', value: value || false }
-  );
-  if (!state.annotations._meta) state.annotations._meta = {};
-  state.annotations._meta.sessionNote = value;
+  try {
+    await apiPost(
+      `/api/annotations/${encodeURIComponent(state.currentProject)}/${encodeURIComponent(state.currentSession)}`,
+      { uuid: '_meta', key: 'sessionNote', value: value || false }
+    );
+    if (!state.annotations._meta) state.annotations._meta = {};
+    state.annotations._meta.sessionNote = value;
+  } catch {}
 }

@@ -96,6 +96,7 @@ function renderDashboard(data, projectId) {
           ${renderToolUsage(data)}
           ${renderModelDist(data)}
           ${renderTopSessions(data)}
+          ${renderProjectDashboard(data, projectId)}
         </div>
       </div>
     </div>`;
@@ -259,6 +260,42 @@ function renderTopSessions(data) {
             <span class="top-session-cost">${formatCost(s.cost)}</span>
           </div>
         `).join('')}
+      </div>
+    </div>`;
+}
+
+// ── Feature 14: Project Dashboard ──────────────────────────────────────
+
+function renderProjectDashboard(data, projectId) {
+  if (!state.settings.enableProjectDashboard || !projectId) return '';
+  const toolEntries = Object.entries(data.byTool || {}).sort((a, b) => b[1].count - a[1].count).slice(0, 8);
+  const maxToolCount = toolEntries[0]?.[1].count || 1;
+
+  // Daily cost trend (last 30 entries)
+  const days = Object.entries(data.byDay || {}).sort((a, b) => a[0].localeCompare(b[0])).slice(-30);
+  const maxDayCost = Math.max(...days.map(d => d[1].cost), 0.01);
+
+  return `
+    <div class="analytics-section">
+      <h3>Project Dashboard</h3>
+      <div class="project-dash-grid">
+        <div class="dash-card">
+          <h4>Most Used Tools</h4>
+          <div class="dash-tool-list">
+            ${toolEntries.map(([name, d]) => `
+              <div class="dash-tool-row">
+                <span class="dash-tool-name">${escapeHtml(name)}</span>
+                <div class="dash-tool-bar"><div style="width:${Math.round(d.count / maxToolCount * 100)}%"></div></div>
+                <span class="dash-tool-count">${d.count}</span>
+              </div>`).join('')}
+          </div>
+        </div>
+        <div class="dash-card">
+          <h4>Daily Cost Trend</h4>
+          <div class="dash-cost-chart">
+            ${days.map(([day, d]) => `<div class="dash-cost-bar" title="${day}: ${formatCost(d.cost)}" style="height:${Math.max(2, Math.round(d.cost / maxDayCost * 60))}px"></div>`).join('')}
+          </div>
+        </div>
       </div>
     </div>`;
 }

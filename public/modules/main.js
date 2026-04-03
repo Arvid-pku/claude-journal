@@ -1,8 +1,8 @@
-import { state, DEFAULTS, api, apiPost, apiPut, apiDelete, IC, setAfterRender, setOnSessionSelect,
+import { state, DEFAULTS, api, apiPost, apiPut, apiDelete, IC, setAfterRender, setOnSessionSelect, setOnAnnotationChange,
   showModal, hideModal, renderMarkdown, escapeHtml, shortenPath, formatCost, applySettings } from './state.js';
 import { renderSidebar, loadSessions, renderSessionList, updateSidebarActive,
-  hideContextMenu, pinSession, renameSession, duplicateSession, moveSession, deleteSession, setupResize } from './sidebar.js';
-import { processMessages, renderMessages, updateSessionInfo, updateStats, startEditing } from './messages.js';
+  hideContextMenu, pinSession, renameSession, duplicateSession, moveSession, deleteSession, setupResize, toggleBulkMode } from './sidebar.js';
+import { processMessages, renderMessages, updateSessionInfo, updateStats, startEditing, showLoadingSkeleton } from './messages.js';
 import { renderRail, updateRailActive } from './rail.js';
 import { toggleNotesPanel, renderNotesPanel } from './notes.js';
 import { toast, loading } from './toast.js';
@@ -13,14 +13,12 @@ import { showAnalytics } from './analytics.js';
 // ── Wire callbacks ──────────────────────────────────────────────────────
 
 setAfterRender(() => { renderRail(); renderNotesPanel(); });
+setOnAnnotationChange(() => { renderNotesPanel(); refreshActiveSidebarPanel(); });
 window.__notesPanel = { toggleNotesPanel };
 setOnSessionSelect((pid, sid) => { navigate('session', { projectId: pid, sessionId: sid }); loadSession(pid, sid); });
 setSearchNavigate((pid, sid, uuid) => {
   loadSession(pid, sid).then(() => {
-    if (uuid) setTimeout(() => {
-      const el = document.querySelector(`.message[data-uuid="${uuid}"]`);
-      if (el) { el.scrollIntoView({ behavior: 'smooth', block: 'center' }); el.querySelector('.message-inner')?.classList.add('flash'); }
-    }, 300);
+    if (uuid) setTimeout(() => scrollToMessage(uuid), 300);
   });
 });
 
@@ -49,6 +47,7 @@ async function loadSession(projectId, sessionId) {
   document.getElementById('btn-favorites').classList.remove('toggled');
   localStorage.setItem('lastSession', JSON.stringify({ projectId, sessionId }));
 
+  showLoadingSkeleton();
   const done = loading('Loading session...');
   try {
     // Ensure sessions are loaded for sidebar
@@ -299,6 +298,20 @@ const SETTING_FIELDS = [
   { id: 'setting-tool-max-output', key: 'maxToolOutput', type: 'number' },
   { id: 'setting-session-sort', key: 'sessionSort', type: 'select' },
   { id: 'setting-auto-scroll', key: 'autoScrollLive', type: 'checkbox' },
+  // Features
+  { id: 'setting-code-copy', key: 'showCodeCopyBtn', type: 'checkbox' },
+  { id: 'setting-collapse', key: 'enableCollapse', type: 'checkbox' },
+  { id: 'setting-diff-view', key: 'showDiffView', type: 'checkbox' },
+  { id: 'setting-group-tools', key: 'groupToolCalls', type: 'checkbox' },
+  { id: 'setting-timeline', key: 'showSessionTimeline', type: 'checkbox' },
+  { id: 'setting-avatars', key: 'showAvatars', type: 'checkbox' },
+  { id: 'setting-skeletons', key: 'showSkeletons', type: 'checkbox' },
+  { id: 'setting-smooth-scroll', key: 'smoothScrollHighlight', type: 'checkbox' },
+  { id: 'setting-tags', key: 'enableTags', type: 'checkbox' },
+  { id: 'setting-share-html', key: 'enableShareHtml', type: 'checkbox' },
+  { id: 'setting-adv-search', key: 'advancedSearch', type: 'checkbox' },
+  { id: 'setting-bulk-ops', key: 'enableBulkOps', type: 'checkbox' },
+  { id: 'setting-project-dash', key: 'enableProjectDashboard', type: 'checkbox' },
 ];
 
 async function showSettings() {
@@ -382,7 +395,7 @@ function confirmAction(key, title, text, onConfirm) {
 
 // Refresh whichever sidebar panel is currently open
 function refreshActiveSidebarPanel() {
-  for (const p of ['starred', 'highlights', 'notes']) {
+  for (const p of PANELS) {
     const el = document.getElementById(`sidebar-${p}`);
     if (el && !el.classList.contains('hidden')) {
       // Force reload by closing and re-opening
@@ -393,9 +406,9 @@ function refreshActiveSidebarPanel() {
   }
 }
 
-const PANELS = ['starred', 'highlights', 'notes'];
-const PANEL_LABELS = { starred: 'Starred', highlights: 'Highlights', notes: 'Notes' };
-const PANEL_TYPES = { starred: 'favorites', highlights: 'highlights', notes: 'notes' };
+const PANELS = ['starred', 'highlights', 'notes', 'tags'];
+const PANEL_LABELS = { starred: 'Starred', highlights: 'Highlights', notes: 'Notes', tags: 'Tags' };
+const PANEL_TYPES = { starred: 'favorites', highlights: 'highlights', notes: 'notes', tags: 'tags' };
 
 async function toggleSidebarPanel(panel) {
   const el = document.getElementById(`sidebar-${panel}`);
@@ -448,6 +461,15 @@ async function toggleSidebarPanel(panel) {
           </div>
           <div class="bookmark-text">${escapeHtml(item.text.slice(0, 120))}</div>
         </div>`).join('');
+    } else if (panel === 'tags') {
+      el.innerHTML = header + items.map(item => `
+        <div class="bookmark-item" data-project="${escapeHtml(item.project)}" data-session="${item.session}" data-uuid="${item.uuid}">
+          <div class="bookmark-header">
+            <span class="bookmark-session">${escapeHtml(item.sessionName)}</span>
+          </div>
+          <div class="bookmark-tags">${(item.tags || []).map(t => `<span class="tag-pill">${escapeHtml(t)}</span>`).join('')}</div>
+          <div class="bookmark-context">${escapeHtml((item.text || '').slice(0, 100))}</div>
+        </div>`).join('');
     } else {
       el.innerHTML = header + items.map(item => `
         <div class="bookmark-item" data-project="${escapeHtml(item.project)}" data-session="${item.session}" data-uuid="${item.uuid || ''}">
@@ -472,12 +494,50 @@ async function toggleSidebarPanel(panel) {
       const notesPanel = document.getElementById('notes-panel');
       if (notesPanel.classList.contains('hidden')) toggleNotesPanel();
       // Scroll to the specific message
-      if (bi.dataset.uuid) setTimeout(() => {
-        const msg = document.querySelector(`.message[data-uuid="${bi.dataset.uuid}"]`);
-        if (msg) { msg.scrollIntoView({ behavior: 'smooth', block: 'center' }); msg.querySelector('.message-inner')?.classList.add('flash'); }
-      }, 400);
+      if (bi.dataset.uuid) setTimeout(() => scrollToMessage(bi.dataset.uuid), 400);
     });
   }));
+}
+
+// ── Feature 11: Scroll to message ───────────────────────────────────────
+
+function scrollToMessage(uuid) {
+  const el = document.querySelector(`.message[data-uuid="${uuid}"]`);
+  if (!el) return;
+  el.scrollIntoView({ behavior: state.settings.smoothScrollHighlight ? 'smooth' : 'auto', block: 'center' });
+  const inner = el.querySelector('.message-inner');
+  if (inner) { inner.classList.remove('flash'); void inner.offsetWidth; inner.classList.add('flash'); }
+}
+
+// ── Feature 13: Share as HTML ───────────────────────────────────────────
+
+async function exportSessionHtml() {
+  if (!state.displayMessages.length) return;
+  const done = loading('Generating HTML...');
+  try {
+    const css = await fetch('/style.css').then(r => r.text());
+    const msgs = document.getElementById('messages').cloneNode(true);
+    // Remove interactive elements
+    msgs.querySelectorAll('.msg-actions, .comment-delete, .tag-add-btn, .tag-input, .timeline-close').forEach(el => el.remove());
+    const session = (state.sessions[state.currentProject] || []).find(s => s.sessionId === state.currentSession);
+    const title = session?.customName || session?.summary || 'Claude Conversation';
+    const html = `<!DOCTYPE html><html lang="en" data-theme="${document.documentElement.dataset.theme}"><head><meta charset="UTF-8"><title>${escapeHtml(title)}</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/styles/github-dark.min.css">
+<style>${css}
+html,body{height:auto;overflow:auto}
+body{background:var(--bg-base);margin:0;padding:24px}
+#messages{overflow:visible!important;height:auto!important;max-height:none!important;padding:0}
+.message{animation:none}
+#content-area{height:auto;overflow:visible}
+</style></head>
+<body><div id="messages">${msgs.innerHTML}</div></body></html>`;
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(new Blob([html], { type: 'text/html' }));
+    a.download = `claude-${state.currentSession?.slice(0, 8) || 'export'}.html`;
+    a.click();
+    toast('Exported as HTML', 'success', 4000);
+  } catch (err) { toast(`Export failed: ${err.message}`, 'error'); }
+  finally { done(); }
 }
 
 // ── Export ───────────────────────────────────────────────────────────────
@@ -691,7 +751,16 @@ function setupEvents() {
   // Context menu
   document.getElementById('context-menu').addEventListener('click', (e) => {
     const btn = e.target.closest('[data-ctx]');
-    if (btn) ({ pin: pinSession, rename: renameSession, duplicate: duplicateSession, move: moveSession, delete: deleteSession })[btn.dataset.ctx]?.();
+    if (!btn) return;
+    const action = btn.dataset.ctx;
+
+    if (action === 'select') {
+      hideContextMenu();
+      if (!state.settings.enableBulkOps) { toast('Enable "Bulk session operations" in Settings', 'info'); return; }
+      toggleBulkMode(true);
+      return;
+    }
+    ({ pin: pinSession, rename: renameSession, duplicate: duplicateSession, move: moveSession, delete: deleteSession })[action]?.();
   });
 
   // Close popups
@@ -699,6 +768,8 @@ function setupEvents() {
     if (!document.getElementById('context-menu').classList.contains('hidden') && !e.target.closest('#context-menu,.session-menu-btn')) hideContextMenu();
     const picker = document.getElementById('highlight-picker');
     if (!picker.classList.contains('hidden') && !picker.contains(e.target) && !e.target.closest('[data-action="highlight"]')) picker.classList.add('hidden');
+    const exportMenu = document.getElementById('export-menu');
+    if (exportMenu && !exportMenu.classList.contains('hidden') && !exportMenu.contains(e.target) && !e.target.closest('#btn-export')) exportMenu.classList.add('hidden');
   });
 
   // Modal dismiss
@@ -722,8 +793,45 @@ function setupEvents() {
   // Toolbar
   document.getElementById('btn-highlights').addEventListener('click', () => { state.highlightsOnly = !state.highlightsOnly; document.getElementById('btn-highlights').classList.toggle('toggled', state.highlightsOnly); renderMessages(); });
   document.getElementById('btn-favorites').addEventListener('click', () => { state.favoritesOnly = !state.favoritesOnly; document.getElementById('btn-favorites').classList.toggle('toggled', state.favoritesOnly); renderMessages(); });
+
+  // Filter bar toggle
+  document.getElementById('btn-filter').addEventListener('click', () => {
+    const bar = document.getElementById('filter-bar');
+    bar.classList.toggle('hidden');
+    document.getElementById('btn-filter').classList.toggle('toggled', !bar.classList.contains('hidden'));
+  });
+
+  // Filter checkboxes
+  document.getElementById('filter-bar').addEventListener('change', (e) => {
+    const cb = e.target.closest('[data-filter]');
+    if (!cb) return;
+    state.messageFilters[cb.dataset.filter] = cb.checked;
+    renderMessages();
+  });
   document.getElementById('btn-live').addEventListener('click', () => { state.liveEnabled = !state.liveEnabled; document.getElementById('btn-live').classList.toggle('active', state.liveEnabled); watchSession(); });
-  document.getElementById('btn-export').addEventListener('click', exportSession);
+  document.getElementById('btn-export').addEventListener('click', (e) => {
+    if (!state.settings.enableShareHtml) { exportSession(); return; }
+    // Show export dropdown
+    let menu = document.getElementById('export-menu');
+    if (!menu) {
+      menu = document.createElement('div');
+      menu.id = 'export-menu';
+      menu.className = 'popup export-popup';
+      menu.innerHTML = `<button data-export="md">Markdown (.md)</button><button data-export="html">HTML (.html)</button>`;
+      menu.addEventListener('click', (ev) => {
+        const btn = ev.target.closest('[data-export]');
+        if (!btn) return;
+        menu.classList.add('hidden');
+        if (btn.dataset.export === 'html') exportSessionHtml(); else exportSession();
+      });
+      document.body.appendChild(menu);
+    }
+    const rect = e.currentTarget.getBoundingClientRect();
+    menu.style.top = `${rect.bottom + 4}px`;
+    menu.style.right = `${window.innerWidth - rect.right}px`;
+    menu.style.left = 'auto';
+    menu.classList.toggle('hidden');
+  });
   document.getElementById('btn-notes').addEventListener('click', toggleNotesPanel);
   document.getElementById('btn-memory').addEventListener('click', showMemory);
   document.getElementById('btn-home').addEventListener('click', goHome);
@@ -764,9 +872,20 @@ function setupEvents() {
 
   // Sidebar search
   document.getElementById('sidebar-search').addEventListener('input', () => {
+    const query = document.getElementById('sidebar-search').value.toLowerCase();
     for (const [pid, sessions] of Object.entries(state.sessions)) {
       const c = document.querySelector(`.project-sessions[data-project="${pid}"]`);
       if (c) renderSessionList(pid, sessions, c);
+    }
+    // Update counts for collapsed (not-yet-loaded) projects too
+    for (const project of state.projects) {
+      if (state.sessions[project.id]) continue; // already handled by renderSessionList
+      const header = document.querySelector(`.project-header[data-project="${project.id}"]`);
+      const countEl = header?.querySelector('.project-count');
+      if (!countEl) continue;
+      if (!query) { countEl.textContent = String(project.sessionCount); continue; }
+      // Can't filter by session name without loading — show "?" to indicate unknown
+      countEl.textContent = `?/${project.sessionCount}`;
     }
   });
 
@@ -785,6 +904,8 @@ function setupEvents() {
     if (e.ctrlKey && e.key === 'e') { e.preventDefault(); exportSession(); return; }
 
     if (e.key === 'Escape') {
+      // Exit bulk mode
+      if (state._bulkMode) { toggleBulkMode(false); return; }
       closeSearch(); hideContextMenu(); document.getElementById('highlight-picker').classList.add('hidden');
       ['note-modal', 'move-modal', 'delete-modal', 'memory-modal', 'settings-modal', 'confirm-modal', 'shortcuts-modal'].forEach(id => hideModal(id));
       const box = document.getElementById('search-box');

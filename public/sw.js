@@ -1,4 +1,4 @@
-const CACHE = 'claude-journal-v2';
+const CACHE = 'claude-journal-v3';
 const STATIC = ['/', '/style.css', '/modules/main.js', '/modules/state.js', '/modules/sidebar.js', '/modules/messages.js', '/modules/rail.js', '/modules/notes.js', '/modules/toast.js', '/modules/router.js', '/modules/search.js', '/modules/analytics.js', '/manifest.json'];
 
 self.addEventListener('install', e => {

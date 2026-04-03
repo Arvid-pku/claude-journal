@@ -12,9 +12,10 @@ export function renderSidebar() {
     group.className = 'project-group';
     group.innerHTML = `
       <div class="project-header collapsed" data-project="${project.id}">
-        <span class="arrow">&#9654;</span>
+        <svg class="project-icon folder-closed" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        <svg class="project-icon folder-open" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 19a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4l2 3h9a2 2 0 0 1 2 2v1"/><path d="M21.5 12H6.3a2 2 0 0 0-1.9 1.4L2 21h15.7a2 2 0 0 0 1.9-1.4L22 12z"/></svg>
         <span>${escapeHtml(shortenPath(project.projectPath))}</span>
-        <span style="margin-left:auto;font-size:10px;color:var(--text-muted)">${project.sessionCount}</span>
+        <span class="project-count" style="margin-left:auto;font-size:10px;color:var(--text-muted)">${project.sessionCount}</span>
       </div>
       <div class="project-sessions" data-project="${project.id}"></div>`;
     group.querySelector('.project-header').addEventListener('click', (e) => toggleProject(project.id, e.currentTarget));
@@ -73,6 +74,25 @@ export function renderSessionList(projectId, sessions, container) {
   }
 
   for (const s of unpinned) appendSessionItem(container, projectId, s, query);
+
+  // Show "no results" when filtering
+  const visibleCount = container.querySelectorAll('.session-item').length;
+  if (query && visibleCount === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'session-empty';
+    empty.textContent = 'No matches';
+    container.appendChild(empty);
+  }
+
+  // Update visible count in project header
+  const header = document.querySelector(`.project-header[data-project="${projectId}"]`);
+  if (header) {
+    const countEl = header.querySelector('.project-count');
+    if (countEl) {
+      const total = sessions.length;
+      countEl.textContent = query && visibleCount !== total ? `${visibleCount}/${total}` : String(total);
+    }
+  }
 }
 
 function appendSessionItem(container, projectId, s, query) {
@@ -106,7 +126,18 @@ function appendSessionItem(container, projectId, s, query) {
       ${cost ? `<span>${cost}</span>` : ''}
     </span>`;
 
-  item.addEventListener('click', (e) => { if (!e.target.closest('.session-menu-btn') && onSessionSelect) onSessionSelect(projectId, s.sessionId); });
+  item.addEventListener('click', (e) => {
+    if (e.target.closest('.session-menu-btn, .session-checkbox')) return;
+    // If in bulk select mode, toggle checkbox instead of navigating
+    if (state._bulkMode) {
+      const key = `${projectId}__${s.sessionId}`;
+      if (state._bulkSelected.has(key)) state._bulkSelected.delete(key); else state._bulkSelected.add(key);
+      item.classList.toggle('bulk-selected', state._bulkSelected.has(key));
+      updateBulkBar();
+      return;
+    }
+    if (onSessionSelect) onSessionSelect(projectId, s.sessionId);
+  });
   item.addEventListener('contextmenu', (e) => { e.preventDefault(); showContextMenu(e.clientX, e.clientY, projectId, s.sessionId); });
   item.querySelector('.session-menu-btn').addEventListener('click', (e) => {
     e.stopPropagation();
@@ -126,6 +157,7 @@ export function updateSidebarActive() {
 
 export function showContextMenu(x, y, projectId, sessionId) {
   state.ctxTarget = { projectId, sessionId };
+
   const menu = document.getElementById('context-menu');
   // Update pin label
   const s = (state.sessions[projectId] || []).find(s => s.sessionId === sessionId);
@@ -238,6 +270,69 @@ export async function deleteSession() {
     await refreshProject(projectId);
     if (state.currentSession === sessionId) { state.currentProject = null; state.currentSession = null; }
   });
+}
+
+// ── Feature 7: Bulk operations ─────────────────────────────────────────
+
+if (!state._bulkSelected) state._bulkSelected = new Set();
+if (!state._bulkMode) state._bulkMode = false;
+
+export function toggleBulkMode(enable) {
+  state._bulkMode = enable !== undefined ? enable : !state._bulkMode;
+  state._bulkSelected.clear();
+  // Toggle visual class on all session items
+  document.querySelectorAll('.session-item').forEach(el => el.classList.remove('bulk-selected'));
+  document.getElementById('sidebar')?.classList.toggle('bulk-mode', state._bulkMode);
+  updateBulkBar();
+  if (state._bulkMode) {
+    // Auto-select the context target
+    if (state.ctxTarget) {
+      const key = `${state.ctxTarget.projectId}__${state.ctxTarget.sessionId}`;
+      state._bulkSelected.add(key);
+      const item = document.querySelector(`.session-item[data-session-id="${state.ctxTarget.sessionId}"][data-project-id="${state.ctxTarget.projectId}"]`);
+      if (item) item.classList.add('bulk-selected');
+      updateBulkBar();
+    }
+  }
+}
+
+function updateBulkBar() {
+  let bar = document.getElementById('bulk-bar');
+  if (!state._bulkMode) { if (bar) bar.remove(); return; }
+  const count = state._bulkSelected.size;
+  if (!bar) {
+    bar = document.createElement('div');
+    bar.id = 'bulk-bar';
+    bar.innerHTML = `<span class="bulk-count"></span><button class="btn btn-sm btn-danger-sm" data-bulk="delete">Delete Selected</button><button class="btn btn-sm bulk-cancel">Done</button>`;
+    bar.querySelector('[data-bulk="delete"]').addEventListener('click', bulkDelete);
+    bar.querySelector('.bulk-cancel').addEventListener('click', () => toggleBulkMode(false));
+    document.getElementById('sidebar').querySelector('.sidebar-full')?.appendChild(bar);
+  }
+  bar.querySelector('.bulk-count').textContent = count ? `${count} selected` : 'Select sessions';
+}
+
+async function bulkDelete() {
+  if (!state._bulkSelected.size) return;
+  if (!confirm(`Delete ${state._bulkSelected.size} session(s)? This cannot be undone.`)) return;
+  const sessions = [...state._bulkSelected].map(k => {
+    const idx = k.indexOf('__');
+    return { project: k.slice(0, idx), session: k.slice(idx + 2) };
+  });
+  try {
+    const result = await apiPost('/api/sessions/batch', { action: 'delete', sessions });
+    const failed = (result.results || []).filter(r => r.error);
+    if (failed.length) {
+      const { toast } = await import('./toast.js');
+      toast(`${failed.length} session(s) failed to delete`, 'error');
+    }
+    const projects = new Set(sessions.map(s => s.project));
+    state._bulkSelected.clear();
+    toggleBulkMode(false);
+    for (const pid of projects) await refreshProject(pid);
+  } catch (e) {
+    const { toast } = await import('./toast.js');
+    toast(`Batch delete failed: ${e.message}`, 'error');
+  }
 }
 
 // ── Resize ──────────────────────────────────────────────────────────────
