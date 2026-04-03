@@ -157,6 +157,19 @@ function setPin(project, session, pinned) {
   atomicWrite(PINS_PATH, JSON.stringify(pins, null, 2));
 }
 
+// ── Project preferences (pin, hide, order) ─────────────────────────────────
+
+const PROJECT_PREFS_PATH = path.join(ANNOTATIONS_DIR, '_project_prefs.json');
+
+function loadProjectPrefs() {
+  if (!fs.existsSync(PROJECT_PREFS_PATH)) return {};
+  try { return JSON.parse(fs.readFileSync(PROJECT_PREFS_PATH, 'utf8')); } catch { return {}; }
+}
+
+function saveProjectPrefs(prefs) {
+  atomicWrite(PROJECT_PREFS_PATH, JSON.stringify(prefs, null, 2));
+}
+
 // ── Session names ───────────────────────────────────────────────────────────
 
 function loadNames() {
@@ -205,6 +218,21 @@ app.put('/api/settings', (req, res) => {
   res.json({ ...updated, _warnings: warnings.length ? warnings : undefined });
 });
 
+// ── Project Preferences ─────────────────────────────────────────────────────
+
+app.get('/api/project-prefs', (_req, res) => res.json(loadProjectPrefs()));
+
+app.put('/api/project-prefs/:project', (req, res) => {
+  const prefs = loadProjectPrefs();
+  const id = req.params.project;
+  if (!prefs[id]) prefs[id] = {};
+  Object.assign(prefs[id], req.body);
+  // Clean up empty prefs
+  if (!prefs[id].pinned && !prefs[id].hidden && prefs[id].order === undefined) delete prefs[id];
+  saveProjectPrefs(prefs);
+  res.json(prefs);
+});
+
 // ── Projects ────────────────────────────────────────────────────────────────
 
 app.get('/api/projects', (_req, res) => {
@@ -245,6 +273,12 @@ app.get('/api/projects', (_req, res) => {
     if (!projects.length) {
       return res.json({ empty: true, dir: PROJECTS_DIR, reason: 'no_sessions',
         message: `No Claude Code sessions found in ${PROJECTS_DIR}. Start a conversation with Claude Code or Codex to create one.` });
+    }
+    // Attach project prefs
+    const prefs = loadProjectPrefs();
+    for (const p of projects) {
+      const pref = prefs[p.id];
+      if (pref) { p.pinned = !!pref.pinned; p.hidden = !!pref.hidden; p.order = pref.order; }
     }
     res.json(projects);
   } catch (err) { res.status(500).json({ error: err.message }); }

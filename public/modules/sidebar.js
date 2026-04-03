@@ -9,48 +9,144 @@ export function renderSidebar() {
   nav.innerHTML = '';
 
   const providerFilter = state.settings.providerFilter || 'all';
-  const claudeProjects = state.projects.filter(p => p.provider !== 'codex');
-  const codexProjects = state.projects.filter(p => p.provider === 'codex');
-  const hasBoth = claudeProjects.length > 0 && codexProjects.length > 0;
+  const showHidden = state._showHiddenProjects || false;
+
+  // Sort projects: pinned first, then by custom order, then alphabetical
+  function sortProjects(projects) {
+    return [...projects].sort((a, b) => {
+      if (a.pinned && !b.pinned) return -1;
+      if (!a.pinned && b.pinned) return 1;
+      if (a.order !== undefined && b.order !== undefined) return a.order - b.order;
+      if (a.order !== undefined) return -1;
+      if (b.order !== undefined) return 1;
+      return a.projectPath.localeCompare(b.projectPath);
+    });
+  }
+
+  function getVisible(projects) {
+    const visible = projects.filter(p => !p.hidden);
+    const hidden = projects.filter(p => p.hidden);
+    return { visible: sortProjects(visible), hidden };
+  }
+
+  const claudeAll = state.projects.filter(p => p.provider !== 'codex');
+  const codexAll = state.projects.filter(p => p.provider === 'codex');
+  const hasBoth = claudeAll.length > 0 && codexAll.length > 0;
 
   function appendProjectGroup(container, project) {
     const group = document.createElement('div');
-    group.className = 'project-group';
+    group.className = `project-group${project.hidden ? ' project-hidden' : ''}`;
+    const pinIcon = project.pinned ? '<span class="project-pin-icon" title="Pinned">&#128204;</span>' : '';
     group.innerHTML = `
       <div class="project-header collapsed" data-project="${project.id}">
         <svg class="project-icon folder-closed" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
         <svg class="project-icon folder-open" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M5 19a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4l2 3h9a2 2 0 0 1 2 2v1"/><path d="M21.5 12H6.3a2 2 0 0 0-1.9 1.4L2 21h15.7a2 2 0 0 0 1.9-1.4L22 12z"/></svg>
         <span>${escapeHtml(shortenPath(project.projectPath))}</span>
-        <span class="project-count" style="margin-left:auto;font-size:10px;color:var(--text-muted)">${project.sessionCount}</span>
+        ${pinIcon}<span class="project-count" style="margin-left:auto;font-size:10px;color:var(--text-muted)">${project.sessionCount}</span>
       </div>
       <div class="project-sessions" data-project="${project.id}"></div>`;
-    group.querySelector('.project-header').addEventListener('click', (e) => toggleProject(project.id, e.currentTarget));
+    group.querySelector('.project-header').addEventListener('click', (e) => {
+      if (e.target.closest('.project-pin-icon')) return;
+      toggleProject(project.id, e.currentTarget);
+    });
+    group.querySelector('.project-header').addEventListener('contextmenu', (e) => {
+      e.preventDefault();
+      showProjectContextMenu(e.clientX, e.clientY, project);
+    });
     container.appendChild(group);
   }
 
-  function renderProviderSection(projects, label) {
-    if (!projects.length) return;
+  function renderProviderSection(allProjects, label) {
+    const { visible, hidden } = getVisible(allProjects);
+    const toShow = showHidden ? sortProjects(allProjects) : visible;
+    if (!toShow.length && !hidden.length) return;
     const section = document.createElement('div');
     section.className = 'provider-section';
-    const totalSessions = projects.reduce((sum, p) => sum + (p.sessionCount || 0), 0);
+    const totalSessions = toShow.reduce((sum, p) => sum + (p.sessionCount || 0), 0);
     const sectionHeader = document.createElement('div');
     sectionHeader.className = 'provider-section-header';
     sectionHeader.innerHTML = `<span class="provider-section-label">${label}</span><span class="provider-section-count">${totalSessions}</span><span class="provider-section-toggle">&#9662;</span>`;
     sectionHeader.addEventListener('click', () => section.classList.toggle('provider-collapsed'));
     section.appendChild(sectionHeader);
-    for (const project of projects) appendProjectGroup(section, project);
+    for (const project of toShow) appendProjectGroup(section, project);
     nav.appendChild(section);
   }
 
-  if (providerFilter !== 'codex' && claudeProjects.length) {
-    if (hasBoth) renderProviderSection(claudeProjects, 'Claude Code');
-    else for (const p of claudeProjects) appendProjectGroup(nav, p);
+  function renderFlat(allProjects) {
+    const { visible, hidden } = getVisible(allProjects);
+    const toShow = showHidden ? sortProjects(allProjects) : visible;
+    for (const p of toShow) appendProjectGroup(nav, p);
   }
 
-  if (providerFilter !== 'claude' && codexProjects.length) {
-    if (hasBoth) renderProviderSection(codexProjects, 'Codex');
-    else for (const p of codexProjects) appendProjectGroup(nav, p);
+  if (providerFilter !== 'codex' && claudeAll.length) {
+    if (hasBoth) renderProviderSection(claudeAll, 'Claude Code');
+    else renderFlat(claudeAll);
   }
+
+  if (providerFilter !== 'claude' && codexAll.length) {
+    if (hasBoth) renderProviderSection(codexAll, 'Codex');
+    else renderFlat(codexAll);
+  }
+
+  // "Show/hide hidden" toggle if any projects are hidden
+  const hiddenCount = state.projects.filter(p => p.hidden).length;
+  if (hiddenCount) {
+    const toggle = document.createElement('button');
+    toggle.className = 'show-hidden-toggle';
+    toggle.textContent = showHidden ? `Hide ${hiddenCount} hidden project${hiddenCount > 1 ? 's' : ''}` : `Show ${hiddenCount} hidden project${hiddenCount > 1 ? 's' : ''}`;
+    toggle.addEventListener('click', () => { state._showHiddenProjects = !state._showHiddenProjects; renderSidebar(); });
+    nav.appendChild(toggle);
+  }
+}
+
+// ── Project Context Menu ───────────────────────────────────────────────
+
+let projectCtxTarget = null;
+
+function showProjectContextMenu(x, y, project) {
+  projectCtxTarget = project;
+  let menu = document.getElementById('project-ctx-menu');
+  if (!menu) {
+    menu = document.createElement('div');
+    menu.id = 'project-ctx-menu';
+    menu.className = 'context-menu';
+    menu.innerHTML = `
+      <button data-pctx="pin"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 17v5"/><path d="M9 10.76a2 2 0 0 1-1.11 1.79l-1.78.9A2 2 0 0 0 5 15.24V16a1 1 0 0 0 1 1h12a1 1 0 0 0 1-1v-.76a2 2 0 0 0-1.11-1.79l-1.78-.9A2 2 0 0 1 15 10.76V7a1 1 0 0 1 1-1 2 2 0 0 0 0-4H8a2 2 0 0 0 0 4 1 1 0 0 1 1 1z"/></svg><span class="pctx-pin-label">Pin</span></button>
+      <button data-pctx="hide"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/><path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/><line x1="1" y1="1" x2="23" y2="23"/></svg><span class="pctx-hide-label">Hide</span></button>`;
+    menu.addEventListener('click', (e) => {
+      const btn = e.target.closest('[data-pctx]');
+      if (!btn || !projectCtxTarget) return;
+      const action = btn.dataset.pctx;
+      menu.classList.add('hidden');
+      if (action === 'pin') toggleProjectPin(projectCtxTarget);
+      else if (action === 'hide') toggleProjectHidden(projectCtxTarget);
+    });
+    document.body.appendChild(menu);
+    document.addEventListener('click', (e) => {
+      if (!menu.contains(e.target)) menu.classList.add('hidden');
+    });
+  }
+  // Update labels
+  menu.querySelector('.pctx-pin-label').textContent = project.pinned ? 'Unpin' : 'Pin to top';
+  menu.querySelector('.pctx-hide-label').textContent = project.hidden ? 'Show' : 'Hide';
+  menu.classList.remove('hidden');
+  const mw = menu.offsetWidth, mh = menu.offsetHeight;
+  menu.style.left = (x + mw > innerWidth ? innerWidth - mw - 8 : x) + 'px';
+  menu.style.top = (y + mh > innerHeight ? innerHeight - mh - 8 : y) + 'px';
+}
+
+async function toggleProjectPin(project) {
+  const newVal = !project.pinned;
+  project.pinned = newVal;
+  try { await apiPut(`/api/project-prefs/${encodeURIComponent(project.id)}`, { pinned: newVal }); } catch {}
+  renderSidebar();
+}
+
+async function toggleProjectHidden(project) {
+  const newVal = !project.hidden;
+  project.hidden = newVal;
+  try { await apiPut(`/api/project-prefs/${encodeURIComponent(project.id)}`, { hidden: newVal }); } catch {}
+  renderSidebar();
 }
 
 async function toggleProject(projectId, header) {

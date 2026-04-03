@@ -227,6 +227,25 @@ html, body {
 .provider-collapsed .provider-section-toggle { transform: rotate(-90deg); }
 .provider-collapsed .project-group { display: none; }
 
+.project-group.project-hidden { opacity: 0.4; }
+.project-group.project-hidden .project-header { font-style: italic; }
+
+.project-pin-icon { font-size: 10px; margin-left: 4px; flex-shrink: 0; }
+
+.show-hidden-toggle {
+  display: block;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  background: none;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  text-align: center;
+}
+.show-hidden-toggle:hover { color: var(--text-secondary); }
+
 .project-header .arrow {
   transition: transform var(--transition);
   font-size: 10px;
