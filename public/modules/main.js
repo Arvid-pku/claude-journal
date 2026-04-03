@@ -588,7 +588,6 @@ function sendChatMessage() {
   const input = document.getElementById('chat-input');
   const message = input.value.trim();
   if (!message || !state.currentProject || !state.currentSession) return;
-  if (state.currentProject.startsWith('codex__')) { toast('Chat is only supported for Claude Code sessions', 'info'); return; }
   if (!state.ws || state.ws.readyState !== 1) { toast('Not connected', 'error'); return; }
 
   // Optimistic: show user message immediately
@@ -640,9 +639,14 @@ function setChatState(s) {
 
 function updateChatBar() {
   const bar = document.getElementById('chat-bar');
-  // Show chat bar only for Claude Code sessions (not Codex, not home)
-  const show = state.currentSession && !state.currentProject?.startsWith('codex__');
-  bar.classList.toggle('hidden', !show);
+  bar.classList.toggle('hidden', !state.currentSession);
+  // Update placeholder based on provider
+  const input = document.getElementById('chat-input');
+  if (state.currentProject?.startsWith('codex__')) {
+    input.placeholder = 'Reply to Codex...';
+  } else {
+    input.placeholder = 'Reply...';
+  }
 }
 
 // ── Keyboard Navigation ─────────────────────────────────────────────────

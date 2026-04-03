@@ -218,6 +218,15 @@ app.put('/api/settings', (req, res) => {
   res.json({ ...updated, _warnings: warnings.length ? warnings : undefined });
 });
 
+// ── Session file resolver (works for both Claude and Codex) ─────────────────
+
+function resolveSessionFile(project, session) {
+  if (project.startsWith('codex__') && codex.isAvailable()) {
+    return codex.getSessionFilePath(session);
+  }
+  return path.join(PROJECTS_DIR, project, `${session}.jsonl`);
+}
+
 // ── Project Preferences ─────────────────────────────────────────────────────
 
 app.get('/api/project-prefs', (_req, res) => res.json(loadProjectPrefs()));
@@ -381,6 +390,7 @@ app.get('/api/messages/:project/:session', (req, res) => {
 
 app.put('/api/messages/:project/:session/:uuid', (req, res) => {
   try {
+    if (req.params.project.startsWith('codex__')) return res.status(400).json({ error: 'Editing Codex messages is not yet supported (different file format)' });
     const fp = path.join(PROJECTS_DIR, req.params.project, `${req.params.session}.jsonl`);
     if (!fs.existsSync(fp)) return res.status(404).json({ error: 'Not found' });
     const { content, partIndex } = req.body;
@@ -413,6 +423,7 @@ app.put('/api/messages/:project/:session/:uuid', (req, res) => {
 // Delete a message from JSONL
 app.delete('/api/messages/:project/:session/:uuid', (req, res) => {
   try {
+    if (req.params.project.startsWith('codex__')) return res.status(400).json({ error: 'Deleting Codex messages is not yet supported (different file format)' });
     const fp = path.join(PROJECTS_DIR, req.params.project, `${req.params.session}.jsonl`);
     if (!fs.existsSync(fp)) return res.status(404).json({ error: 'Not found' });
     const lines = fs.readFileSync(fp, 'utf8').split('\n');
@@ -843,38 +854,43 @@ app.put('/api/sessions/:project/:session/rename', (req, res) => {
     if (!name?.trim()) return res.status(400).json({ error: 'name required' });
     const trimmed = name.trim();
     saveName(req.params.project, req.params.session, trimmed);
-    // Write custom-title to JSONL
-    const projectDir = path.join(PROJECTS_DIR, req.params.project);
-    const fp = path.join(projectDir, `${req.params.session}.jsonl`);
-    if (fs.existsSync(fp)) {
-      const lines = fs.readFileSync(fp, 'utf8').split('\n').filter(l => {
-        if (!l.trim()) return false;
-        try { return JSON.parse(l).type !== 'custom-title'; } catch { return true; }
-      });
-      lines.push(JSON.stringify({ type: 'custom-title', customTitle: trimmed, sessionId: req.params.session }));
-      atomicWrite(fp, lines.join('\n') + '\n');
+
+    if (!req.params.project.startsWith('codex__')) {
+      // Claude Code: write custom-title to JSONL and update sessions-index
+      const projectDir = path.join(PROJECTS_DIR, req.params.project);
+      const fp = path.join(projectDir, `${req.params.session}.jsonl`);
+      if (fs.existsSync(fp)) {
+        const lines = fs.readFileSync(fp, 'utf8').split('\n').filter(l => {
+          if (!l.trim()) return false;
+          try { return JSON.parse(l).type !== 'custom-title'; } catch { return true; }
+        });
+        lines.push(JSON.stringify({ type: 'custom-title', customTitle: trimmed, sessionId: req.params.session }));
+        atomicWrite(fp, lines.join('\n') + '\n');
+      }
+      const indexPath = path.join(projectDir, 'sessions-index.json');
+      let index = fs.existsSync(indexPath) ? JSON.parse(fs.readFileSync(indexPath, 'utf8')) : buildSessionsIndex(projectDir);
+      const entry = index.entries?.find(e => e.sessionId === req.params.session);
+      if (entry) entry.summary = trimmed;
+      atomicWrite(indexPath, JSON.stringify(index, null, 2));
     }
-    // Update sessions-index.json
-    const indexPath = path.join(projectDir, 'sessions-index.json');
-    let index = fs.existsSync(indexPath) ? JSON.parse(fs.readFileSync(indexPath, 'utf8')) : buildSessionsIndex(projectDir);
-    const entry = index.entries?.find(e => e.sessionId === req.params.session);
-    if (entry) entry.summary = trimmed;
-    atomicWrite(indexPath, JSON.stringify(index, null, 2));
+    // Codex: name is saved in _names.json only (no JSONL modification)
     res.json({ ok: true });
   } catch (err) { res.status(500).json({ error: err.message }); }
 });
 
 app.delete('/api/sessions/:project/:session', (req, res) => {
   try {
-    const projectDir = path.join(PROJECTS_DIR, req.params.project);
-    const fp = path.join(projectDir, `${req.params.session}.jsonl`);
-    const dirPath = path.join(projectDir, req.params.session);
-    if (!fs.existsSync(fp)) return res.status(404).json({ error: 'Not found' });
+    const fp = resolveSessionFile(req.params.project, req.params.session);
+    if (!fp || !fs.existsSync(fp)) return res.status(404).json({ error: 'Not found' });
     fs.unlinkSync(fp);
-    if (fs.existsSync(dirPath)) fs.rmSync(dirPath, { recursive: true, force: true });
-    const indexPath = path.join(projectDir, 'sessions-index.json');
-    if (fs.existsSync(indexPath)) {
-      try { const idx = JSON.parse(fs.readFileSync(indexPath, 'utf8')); idx.entries = (idx.entries || []).filter(e => e.sessionId !== req.params.session); atomicWrite(indexPath, JSON.stringify(idx, null, 2)); } catch {}
+    if (!req.params.project.startsWith('codex__')) {
+      const projectDir = path.join(PROJECTS_DIR, req.params.project);
+      const dirPath = path.join(projectDir, req.params.session);
+      if (fs.existsSync(dirPath)) fs.rmSync(dirPath, { recursive: true, force: true });
+      const indexPath = path.join(projectDir, 'sessions-index.json');
+      if (fs.existsSync(indexPath)) {
+        try { const idx = JSON.parse(fs.readFileSync(indexPath, 'utf8')); idx.entries = (idx.entries || []).filter(e => e.sessionId !== req.params.session); atomicWrite(indexPath, JSON.stringify(idx, null, 2)); } catch {}
+      }
     }
     const annoPath = path.join(ANNOTATIONS_DIR, `${req.params.project}__${req.params.session}.json`);
     if (fs.existsSync(annoPath)) fs.unlinkSync(annoPath);
@@ -885,11 +901,17 @@ app.delete('/api/sessions/:project/:session', (req, res) => {
 
 app.post('/api/sessions/:project/:session/duplicate', (req, res) => {
   try {
-    const projectDir = path.join(PROJECTS_DIR, req.params.project);
-    const srcPath = path.join(projectDir, `${req.params.session}.jsonl`);
-    if (!fs.existsSync(srcPath)) return res.status(404).json({ error: 'Not found' });
+    const srcPath = resolveSessionFile(req.params.project, req.params.session);
+    if (!srcPath || !fs.existsSync(srcPath)) return res.status(404).json({ error: 'Not found' });
     const newId = crypto.randomUUID();
-    fs.copyFileSync(srcPath, path.join(projectDir, `${newId}.jsonl`));
+    // Copy to the same directory as the source
+    const dstPath = path.join(path.dirname(srcPath), `${path.basename(srcPath, '.jsonl')}-copy-${newId.slice(0, 8)}.jsonl`);
+    // For Claude Code, keep simple naming in the project dir
+    if (!req.params.project.startsWith('codex__')) {
+      fs.copyFileSync(srcPath, path.join(path.dirname(srcPath), `${newId}.jsonl`));
+    } else {
+      fs.copyFileSync(srcPath, dstPath);
+    }
     const names = loadNames();
     saveName(req.params.project, newId, `(Copy) ${names[`${req.params.project}__${req.params.session}`] || 'Session'}`);
     res.json({ ok: true, newSessionId: newId });
@@ -898,6 +920,7 @@ app.post('/api/sessions/:project/:session/duplicate', (req, res) => {
 
 app.post('/api/sessions/:project/:session/move', (req, res) => {
   try {
+    if (req.params.project.startsWith('codex__')) return res.status(400).json({ error: 'Move is not supported for Codex sessions' });
     const { targetProject } = req.body;
     if (!targetProject || targetProject === req.params.project) return res.status(400).json({ error: 'Invalid target' });
     const srcDir = path.join(PROJECTS_DIR, req.params.project);
@@ -1008,36 +1031,50 @@ wss.on('connection', (ws) => {
     }
     if (msg.type === 'unwatch') { if (watcher) { watcher.close(); watcher = null; } }
 
-    // ── Chat: send a message to Claude Code ──────────────────────────
+    // ── Chat: send a message to Claude Code or Codex ──────────────────
     if (msg.type === 'chat') {
       if (chatProc) { ws.send(JSON.stringify({ type: 'chat_error', error: 'A conversation is already in progress' })); return; }
-      if (msg.project?.startsWith('codex__')) { ws.send(JSON.stringify({ type: 'chat_error', error: 'Chat is only supported for Claude Code sessions' })); return; }
       const sessionId = msg.session;
       const userMessage = msg.message;
       if (!sessionId || !userMessage) return;
 
-      // Find claude CLI
-      const claudePath = process.env.CLAUDE_PATH || 'claude';
-      // Resolve actual project working directory from sessions-index or decoded path
-      const projectDir = path.join(PROJECTS_DIR, msg.project);
-      let cwd = process.cwd();
-      try {
-        const indexPath = path.join(projectDir, 'sessions-index.json');
-        if (fs.existsSync(indexPath)) {
-          const idx = JSON.parse(fs.readFileSync(indexPath, 'utf8'));
-          if (idx.originalPath && fs.existsSync(idx.originalPath)) cwd = idx.originalPath;
-        }
-        if (cwd === process.cwd()) {
-          // Fallback: decode project dir name to path
-          const decoded = '/' + msg.project.replace(/^-/, '').replace(/-/g, '/');
-          if (fs.existsSync(decoded)) cwd = decoded;
-        }
-      } catch {}
+      const isCodex = msg.project?.startsWith('codex__');
+      let cliPath, args, cwd;
+
+      if (isCodex) {
+        // Codex: codex exec resume <session-id> "message" --json
+        cliPath = process.env.CODEX_PATH || 'codex';
+        args = ['exec', 'resume', sessionId, userMessage, '--json'];
+        // Resolve cwd from SQLite
+        cwd = process.cwd();
+        try {
+          const threads = codex.isAvailable() ? require('./providers/codex').listProjects() : [];
+          const project = threads.find(p => p.id === msg.project);
+          if (project?.projectPath && fs.existsSync(project.projectPath)) cwd = project.projectPath;
+        } catch {}
+      } else {
+        // Claude Code: claude --resume <session-id> --print --output-format stream-json --verbose -p "message"
+        cliPath = process.env.CLAUDE_PATH || 'claude';
+        args = ['--resume', sessionId, '--print', '--output-format', 'stream-json', '--verbose', '-p', userMessage];
+        // Resolve cwd
+        const projectDir = path.join(PROJECTS_DIR, msg.project);
+        cwd = process.cwd();
+        try {
+          const indexPath = path.join(projectDir, 'sessions-index.json');
+          if (fs.existsSync(indexPath)) {
+            const idx = JSON.parse(fs.readFileSync(indexPath, 'utf8'));
+            if (idx.originalPath && fs.existsSync(idx.originalPath)) cwd = idx.originalPath;
+          }
+          if (cwd === process.cwd()) {
+            const decoded = '/' + msg.project.replace(/^-/, '').replace(/-/g, '/');
+            if (fs.existsSync(decoded)) cwd = decoded;
+          }
+        } catch {}
+      }
 
       ws.send(JSON.stringify({ type: 'chat_start' }));
 
-      const args = ['--resume', sessionId, '--print', '--output-format', 'stream-json', '--verbose', '-p', userMessage];
-      chatProc = require('child_process').spawn(claudePath, args, {
+      chatProc = require('child_process').spawn(cliPath, args, {
         cwd,
         env: { ...process.env },
         stdio: ['ignore', 'pipe', 'pipe'],
@@ -1047,19 +1084,29 @@ wss.on('connection', (ws) => {
       chatProc.stdout.on('data', (data) => {
         buffer += data.toString();
         const lines = buffer.split('\n');
-        buffer = lines.pop(); // keep incomplete last line
+        buffer = lines.pop();
         for (const line of lines) {
           if (!line.trim()) continue;
           try {
             const parsed = JSON.parse(line);
             if (ws.readyState !== 1) continue;
-            if (parsed.type === 'assistant') {
-              ws.send(JSON.stringify({ type: 'chat_delta', data: parsed }));
-            } else if (parsed.type === 'result') {
-              if (parsed.is_error || parsed.subtype === 'error_during_execution') {
-                ws.send(JSON.stringify({ type: 'chat_error', error: parsed.result?.slice(0, 500) || 'Claude encountered an error' }));
-              } else {
+            if (isCodex) {
+              // Codex events: item.completed (agent message), turn.completed (done)
+              if (parsed.type === 'item.completed' && parsed.item?.type === 'agent_message') {
+                ws.send(JSON.stringify({ type: 'chat_delta', data: parsed }));
+              } else if (parsed.type === 'turn.completed') {
                 ws.send(JSON.stringify({ type: 'chat_done', data: parsed }));
+              }
+            } else {
+              // Claude events
+              if (parsed.type === 'assistant') {
+                ws.send(JSON.stringify({ type: 'chat_delta', data: parsed }));
+              } else if (parsed.type === 'result') {
+                if (parsed.is_error || parsed.subtype === 'error_during_execution') {
+                  ws.send(JSON.stringify({ type: 'chat_error', error: parsed.result?.slice(0, 500) || 'Error' }));
+                } else {
+                  ws.send(JSON.stringify({ type: 'chat_done', data: parsed }));
+                }
               }
             }
           } catch {}
@@ -1075,15 +1122,14 @@ wss.on('connection', (ws) => {
 
       chatProc.on('close', (code) => {
         chatProc = null;
-        if (ws.readyState === 1) {
-          ws.send(JSON.stringify({ type: 'chat_end', code }));
-        }
+        if (ws.readyState === 1) ws.send(JSON.stringify({ type: 'chat_end', code }));
       });
 
       chatProc.on('error', (err) => {
         chatProc = null;
         if (ws.readyState === 1) {
-          ws.send(JSON.stringify({ type: 'chat_error', error: `Failed to start claude: ${err.message}. Is Claude Code installed?` }));
+          const name = isCodex ? 'codex' : 'claude';
+          ws.send(JSON.stringify({ type: 'chat_error', error: `Failed to start ${name}: ${err.message}. Is it installed?` }));
         }
       });
     }

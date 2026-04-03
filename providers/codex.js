@@ -203,10 +203,16 @@ function parseMessages(sessionId) {
   // Get model from SQLite (more reliable than session_meta)
   const threadInfo = queryThreads().find(t => t.id === sessionId);
   let model = threadInfo?.model || '';
-  const seenUserMsgs = new Set(); // dedup messages that appear in both event_msg and response_item
+  const seenUserMsgs = new Set();
   const seenAssistMsgs = new Set();
 
-  for (const line of lines) {
+  // Stable UUID from line index + session ID (deterministic across parses)
+  function stableId(lineIdx, suffix) {
+    return crypto.createHash('md5').update(`${sessionId}:${lineIdx}:${suffix || ''}`).digest('hex').replace(/(.{8})(.{4})(.{4})(.{4})(.{12})/, '$1-$2-$3-$4-$5');
+  }
+
+  for (let lineIdx = 0; lineIdx < lines.length; lineIdx++) {
+    const line = lines[lineIdx];
     let entry;
     try { entry = JSON.parse(line); } catch { continue; }
     const ts = entry.timestamp;
@@ -224,7 +230,7 @@ function parseMessages(sessionId) {
             seenUserMsgs.add(msgKey);
             normalized.push({
               type: 'user',
-              uuid: crypto.randomUUID(),
+              uuid: stableId(lineIdx, normalized.length),
               timestamp: ts,
               message: { role: 'user', content: p.message },
             });
@@ -235,7 +241,7 @@ function parseMessages(sessionId) {
             seenAssistMsgs.add(msgKey);
             normalized.push({
               type: 'assistant',
-              uuid: crypto.randomUUID(),
+              uuid: stableId(lineIdx, normalized.length),
               timestamp: ts,
               message: {
                 role: 'assistant',
@@ -286,7 +292,7 @@ function parseMessages(sessionId) {
           // Create an assistant message with tool_use
           normalized.push({
             type: 'assistant',
-            uuid: p.call_id || crypto.randomUUID(),
+            uuid: p.call_id || stableId(lineIdx, normalized.length),
             timestamp: ts,
             message: {
               role: 'assistant',
@@ -306,7 +312,7 @@ function parseMessages(sessionId) {
           if (toolName === 'apply_patch') toolName = 'Edit';
           normalized.push({
             type: 'assistant',
-            uuid: p.call_id || crypto.randomUUID(),
+            uuid: p.call_id || stableId(lineIdx, normalized.length),
             timestamp: ts,
             message: {
               role: 'assistant',
@@ -328,7 +334,7 @@ function parseMessages(sessionId) {
               seenUserMsgs.add(msgKey);
               normalized.push({
                 type: 'user',
-                uuid: crypto.randomUUID(),
+                uuid: stableId(lineIdx, normalized.length),
                 timestamp: ts,
                 message: { role: 'user', content: text },
               });
@@ -342,7 +348,7 @@ function parseMessages(sessionId) {
               seenAssistMsgs.add(msgKey);
               normalized.push({
                 type: 'assistant',
-                uuid: crypto.randomUUID(),
+                uuid: stableId(lineIdx, normalized.length),
                 timestamp: ts,
                 message: {
                   role: 'assistant',
@@ -358,7 +364,7 @@ function parseMessages(sessionId) {
           if (summaryText) {
             normalized.push({
               type: 'assistant',
-              uuid: crypto.randomUUID(),
+              uuid: stableId(lineIdx, normalized.length),
               timestamp: ts,
               message: {
                 role: 'assistant',
@@ -388,7 +394,7 @@ function postProcess(messages) {
         if (block.type === 'tool_use' && block._result) {
           result.push({
             type: 'user',
-            uuid: crypto.randomUUID(),
+            uuid: stableId(lineIdx, normalized.length),
             timestamp: msg.timestamp,
             message: [{ type: 'tool_result', tool_use_id: block.id, content: block._result.content, is_error: block._result.isError }],
           });
