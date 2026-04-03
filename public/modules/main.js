@@ -71,6 +71,7 @@ async function loadSession(projectId, sessionId) {
     renderMessages();
     updateSessionInfo();
     updateSidebarActive();
+    updateChatBar();
     watchSession();
   } catch (err) {
     toast(`Failed to load session: ${err.message}`, 'error');
@@ -101,6 +102,7 @@ function clearSessionContext() {
   document.getElementById('conv-rail').innerHTML = '';
   document.getElementById('notes-panel').classList.add('hidden');
   updateSidebarActive();
+  updateChatBar();
 }
 
 function goHome() {
@@ -232,6 +234,21 @@ function connectWS() {
       state.displayMessages = processMessages(msg.messages);
       api(`/api/annotations/${encodeURIComponent(state.currentProject)}/${encodeURIComponent(state.currentSession)}`)
         .then(a => { state.annotations = a; renderMessages(); if (scrolled && state.settings.autoScrollLive) scrollToBottom(); });
+    }
+    // Chat responses
+    if (msg.type === 'chat_start') {
+      setChatState('responding');
+    }
+    if (msg.type === 'chat_delta') {
+      // Live update will pick up JSONL changes — just scroll
+      scrollToBottom();
+    }
+    if (msg.type === 'chat_done' || msg.type === 'chat_end') {
+      setChatState('ready');
+    }
+    if (msg.type === 'chat_error') {
+      toast(`Chat: ${msg.error}`, 'error', 6000);
+      setChatState('ready');
     }
   };
   state.ws.onclose = () => {
@@ -565,6 +582,69 @@ function exportSession() {
   toast('Exported as Markdown', 'success', 4000);
 }
 
+// ── Chat with Claude Code ───────────────────────────────────────────────
+
+function sendChatMessage() {
+  const input = document.getElementById('chat-input');
+  const message = input.value.trim();
+  if (!message || !state.currentProject || !state.currentSession) return;
+  if (state.currentProject.startsWith('codex__')) { toast('Chat is only supported for Claude Code sessions', 'info'); return; }
+  if (!state.ws || state.ws.readyState !== 1) { toast('Not connected', 'error'); return; }
+
+  // Optimistic: show user message immediately
+  const container = document.getElementById('messages');
+  const userDiv = document.createElement('div');
+  userDiv.className = 'message user-msg chat-pending';
+  userDiv.innerHTML = `<div class="message-inner"><div class="msg-header"><span class="msg-role">You</span></div><div class="msg-body">${renderMarkdown(message)}</div></div>`;
+  container.appendChild(userDiv);
+  scrollToBottom();
+
+  state.ws.send(JSON.stringify({
+    type: 'chat',
+    project: state.currentProject,
+    session: state.currentSession,
+    message,
+  }));
+
+  input.value = '';
+  input.style.height = 'auto';
+  setChatState('responding');
+}
+
+function cancelChat() {
+  if (state.ws && state.ws.readyState === 1) {
+    state.ws.send(JSON.stringify({ type: 'chat_cancel' }));
+  }
+  setChatState('ready');
+}
+
+function setChatState(s) {
+  const sendBtn = document.getElementById('chat-send');
+  const cancelBtn = document.getElementById('chat-cancel');
+  const dot = document.getElementById('chat-status-dot');
+  const input = document.getElementById('chat-input');
+  if (s === 'responding') {
+    sendBtn.classList.add('hidden');
+    cancelBtn.classList.remove('hidden');
+    dot.classList.remove('hidden');
+    input.disabled = true;
+    input.placeholder = 'Claude is responding...';
+  } else {
+    sendBtn.classList.remove('hidden');
+    cancelBtn.classList.add('hidden');
+    dot.classList.add('hidden');
+    input.disabled = false;
+    input.placeholder = 'Reply...';
+  }
+}
+
+function updateChatBar() {
+  const bar = document.getElementById('chat-bar');
+  // Show chat bar only for Claude Code sessions (not Codex, not home)
+  const show = state.currentSession && !state.currentProject?.startsWith('codex__');
+  bar.classList.toggle('hidden', !show);
+}
+
 // ── Keyboard Navigation ─────────────────────────────────────────────────
 
 let kbFocusIdx = -1;
@@ -845,6 +925,18 @@ function setupEvents() {
   document.getElementById('btn-sidebar-open').addEventListener('click', () => document.getElementById('sidebar').classList.remove('collapsed'));
   document.getElementById('btn-settings-mini').addEventListener('click', showSettings);
 
+  // Chat
+  document.getElementById('chat-send').addEventListener('click', sendChatMessage);
+  document.getElementById('chat-cancel').addEventListener('click', cancelChat);
+  document.getElementById('chat-input').addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendChatMessage(); }
+  });
+  // Auto-resize chat input
+  document.getElementById('chat-input').addEventListener('input', (e) => {
+    e.target.style.height = 'auto';
+    e.target.style.height = Math.min(150, e.target.scrollHeight) + 'px';
+  });
+
   // Sidebar menu items
   document.querySelectorAll('.sidebar-menu-item[data-tab]').forEach(btn => {
     btn.addEventListener('click', () => toggleSidebarPanel(btn.dataset.tab));
@@ -931,7 +1023,13 @@ function setupEvents() {
   });
 
   // Scroll tracking
-  document.getElementById('messages').addEventListener('scroll', updateRailActive, { passive: true });
+  document.getElementById('messages').addEventListener('scroll', () => {
+    updateRailActive();
+    updateScrollBtn();
+  }, { passive: true });
+
+  // Scroll-to-bottom button
+  document.getElementById('scroll-bottom-btn').addEventListener('click', scrollToBottom);
 
   setupResize();
 }
@@ -939,7 +1037,11 @@ function setupEvents() {
 // ── Helpers ─────────────────────────────────────────────────────────────
 
 function isScrolledToBottom() { const el = document.getElementById('messages'); return el.scrollHeight - el.scrollTop - el.clientHeight < 100; }
-function scrollToBottom() { document.getElementById('messages').scrollTop = document.getElementById('messages').scrollHeight; }
+function scrollToBottom() { document.getElementById('messages').scrollTo({ top: document.getElementById('messages').scrollHeight, behavior: 'smooth' }); }
+function updateScrollBtn() {
+  const btn = document.getElementById('scroll-bottom-btn');
+  btn.classList.toggle('hidden', isScrolledToBottom() || !state.currentSession);
+}
 
 // ── Random Tips ─────────────────────────────────────────────────────────
 

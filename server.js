@@ -946,6 +946,7 @@ app.post('/api/annotations/:project/:session', (req, res) => {
 
 wss.on('connection', (ws) => {
   let watcher = null;
+  let chatProc = null;
   ws.on('message', (raw) => {
     let msg; try { msg = JSON.parse(raw); } catch { return; }
     if (msg.type === 'watch') {
@@ -972,8 +973,95 @@ wss.on('connection', (ws) => {
       });
     }
     if (msg.type === 'unwatch') { if (watcher) { watcher.close(); watcher = null; } }
+
+    // ── Chat: send a message to Claude Code ──────────────────────────
+    if (msg.type === 'chat') {
+      if (chatProc) { ws.send(JSON.stringify({ type: 'chat_error', error: 'A conversation is already in progress' })); return; }
+      if (msg.project?.startsWith('codex__')) { ws.send(JSON.stringify({ type: 'chat_error', error: 'Chat is only supported for Claude Code sessions' })); return; }
+      const sessionId = msg.session;
+      const userMessage = msg.message;
+      if (!sessionId || !userMessage) return;
+
+      // Find claude CLI
+      const claudePath = process.env.CLAUDE_PATH || 'claude';
+      // Resolve actual project working directory from sessions-index or decoded path
+      const projectDir = path.join(PROJECTS_DIR, msg.project);
+      let cwd = process.cwd();
+      try {
+        const indexPath = path.join(projectDir, 'sessions-index.json');
+        if (fs.existsSync(indexPath)) {
+          const idx = JSON.parse(fs.readFileSync(indexPath, 'utf8'));
+          if (idx.originalPath && fs.existsSync(idx.originalPath)) cwd = idx.originalPath;
+        }
+        if (cwd === process.cwd()) {
+          // Fallback: decode project dir name to path
+          const decoded = '/' + msg.project.replace(/^-/, '').replace(/-/g, '/');
+          if (fs.existsSync(decoded)) cwd = decoded;
+        }
+      } catch {}
+
+      ws.send(JSON.stringify({ type: 'chat_start' }));
+
+      const args = ['--resume', sessionId, '--print', '--output-format', 'stream-json', '--verbose', '-p', userMessage];
+      chatProc = require('child_process').spawn(claudePath, args, {
+        cwd,
+        env: { ...process.env },
+        stdio: ['ignore', 'pipe', 'pipe'],
+      });
+
+      let buffer = '';
+      chatProc.stdout.on('data', (data) => {
+        buffer += data.toString();
+        const lines = buffer.split('\n');
+        buffer = lines.pop(); // keep incomplete last line
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const parsed = JSON.parse(line);
+            if (ws.readyState !== 1) continue;
+            if (parsed.type === 'assistant') {
+              ws.send(JSON.stringify({ type: 'chat_delta', data: parsed }));
+            } else if (parsed.type === 'result') {
+              if (parsed.is_error || parsed.subtype === 'error_during_execution') {
+                ws.send(JSON.stringify({ type: 'chat_error', error: parsed.result?.slice(0, 500) || 'Claude encountered an error' }));
+              } else {
+                ws.send(JSON.stringify({ type: 'chat_done', data: parsed }));
+              }
+            }
+          } catch {}
+        }
+      });
+
+      chatProc.stderr.on('data', (data) => {
+        const errMsg = data.toString().trim();
+        if (errMsg && ws.readyState === 1) {
+          ws.send(JSON.stringify({ type: 'chat_error', error: errMsg.slice(0, 500) }));
+        }
+      });
+
+      chatProc.on('close', (code) => {
+        chatProc = null;
+        if (ws.readyState === 1) {
+          ws.send(JSON.stringify({ type: 'chat_end', code }));
+        }
+      });
+
+      chatProc.on('error', (err) => {
+        chatProc = null;
+        if (ws.readyState === 1) {
+          ws.send(JSON.stringify({ type: 'chat_error', error: `Failed to start claude: ${err.message}. Is Claude Code installed?` }));
+        }
+      });
+    }
+
+    if (msg.type === 'chat_cancel') {
+      if (chatProc) { chatProc.kill('SIGTERM'); chatProc = null; }
+    }
   });
-  ws.on('close', () => { if (watcher) { watcher.close(); watcher = null; } });
+  ws.on('close', () => {
+    if (watcher) { watcher.close(); watcher = null; }
+    if (chatProc) { chatProc.kill('SIGTERM'); chatProc = null; }
+  });
 });
 
 // ── Start ───────────────────────────────────────────────────────────────────
